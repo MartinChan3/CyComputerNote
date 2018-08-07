@@ -373,3 +373,248 @@ int height( BinaryNode* t)
 特点：中序遍历、后序遍历的运行时间始终为O(N)，这是其一大特征；==前序遍历时间略短？？为O(logN)==
 
 7. *B树：数据特别多的情况下，就无法放入内存，只能把数据结构放到磁盘上；而事实上，在传统机械硬盘的访问情况中，CPU运行速度是远快于数据从磁盘传输到内存的速度的；
+为了将磁盘访问次数减小到一个非常小的常数，程序员往往愿意写一个复杂的程序来实现它，因为只要不是特别冗长，机器指令基本上是不占时间的；由于典型的AVL树接近最优高度，应该知道的是，二叉查找树基本上不可行；尽量减少深度是最好的选择，如**M叉查找树(M-ary search tree)**有M路分支，深度有着明显的减少。一棵完全二叉树高度大约为logN,一棵完全M二叉树高度大约是logmN。
+同时，为了避免出现退化为链表的情况（只有单个子），也要进行一定的处理，这里引出B树的概念；
+定义：阶为M的B树是一棵具有下列结构特性的树：
+1） 数据项存储在树叶上；
+2） 非叶结点存储到M-1个键，来指示搜索的方向；键i代表子树i+1中最小的键；
+3） 树的根或者是一片树叶，或其儿子数在2和M之间；  
+4） 除了根以外，所有的非树叶结点的儿子数在M/2到M之间；
+5） 所有的树叶都在相同的深度上并有L/2和L之间个数据项；
+
+具体B树的方案后面再做详细解释；
+
+8. 标准库中的set与map
+传统的stl容器vector和list对于查找来说是不够用的，stl提供了两个附加的容器set和map，这两个容器保证了节本操作(如插入、删除和查找)的对数时间消耗；
+
+set:
+set是一个排序后的容器，不接受重复；许多访问vector和list中的项的例程也适用于set。特别的，iterator和const_iterator类型是嵌套于set的，该类型允许遍历set。
+set特有操作是高效的插入、删除和执行基本查找；
+插入操作：因为set不接受重复，可能会出现插入失败的情况，因此使用bool变量返回来指示该次插入是否成功。
+set的insert提供了两种形式(QSet只提供了一种)，如果知道精确的数据结构就可以以线性时间插入数据；
+set的erase操作引入了三种形式（QSet两种）
+set的find操作是优于contains操作的，该例程会直接返回一个iterator可以指向项的位置（若失败则指向末端的标志符）；
+set默认情况下使用less<Object>函数对象来实现，而该函数是通过对Object调用operator<来实现的。另一种可以替代的排序方法是通过**具有函数对象类型的set模板**来举例说明，例如string对象的一个比较；
+```
+set< string, CaseIntesiveCompare> s;
+s.insert("Hello");s.insert("HeLLo");
+cout << "The size is:" << s.size() << endl;
+```
+其输出为1
+
+map:
+map是用来存储排序后由键和键值组成的项的集合；其键值必须唯一，但是多个键可以对应同一个值；因此，值不需要唯一；在map中键保持逻辑排序后的顺序；
+map的执行类似于用pair例示的set。其中比较函数仅仅涉及到键。因此，map支持begin、end、size和empty,但是基本的迭代器是一个键一值对。换句话说，对iterator itr,*itr是pair<KeyType, ValueType>类型的。map也支持insert、find和erase。对于insert，必须要提供pair<KeyType, ValueType>对象，而find只需要一个键即可，而其返回值是一个pair。
+map同时提供了一个额外的操作符来获取索引对应的内容；
+```
+ValueType & operator[] ( const KeyType &key)
+```
+如果在map中存在key，就返回指向相应值的引用。如果在map中不存在key，就在map中插入一个默认的值，然后返回指向这个默认值的引用。该默认值是通过应用零参数的构造函数获得的，如果为基本类型，就是0。由于const内部变量operator[]不能用于常量map对象。
+例子：
+```
+map<string,double> salaries;
+
+salaries["Pat"] = 75000.00;
+cout << salaries["Pat"] << endl;
+cout << salaries["Jan"] << endl;
+
+map< string, double>::const_iterator itr;
+itr = salaries.find( "Chris");
+if ( itr == salaries.end())
+	cout << "Not an empolyee of this company!" << endl;
+else
+	cout << it->second << endl;
+```
+set与map的实现：
+C++需要set和map支持在最坏的情况下对基本的操作insert、erase和find仅消耗对数时间；相对应的，底层实现的是平衡二叉查找树，典型的情况往往不是使用AVL树，而是使用自顶向下的红黑树（后文讨论）；
+实现set和map时一个重要问题是需要提供对于迭代器类的支持。在程序内部迭代器在迭代过程中始终保持一个指针指向于“当前”结点。比较困难的地方时如果将高效的迭代器推进到下一个结点。有好几种方案，其中stl采用了线索树(threaded tree)的方法；
+
+Example(Map):
+很多单词通过替换一个字母就可以变为另一个单词，例如wine可以变为dine/wife/wind。现在要求写一个程序，来找到所有的至少可以通过替换其中一个字母来实现；
+最直接的方法是使用map，其中键为单词，值为通过对键进行单个字符替换就可以得到那些单词的集合。
+```
+//查找程序
+void printHighChangables( const map< string, vector<string>> & adjWords, int minWords = 15)
+{
+	map< string, vector<string>>::const_iterator itr;
+	
+	for ( itr = adjWords.begin(); itr != adjWords.end(); ++itr)
+	{
+		const pair< string, vector<string>> & entry = *itr;
+		const vector< string> & words = entry.second;
+		
+		if ( word.size() >= minWords)
+		{
+			cout << entry.first << " ("<< words.size() <<"):";
+			for ( int i = 0; i < word.size(); i++)
+			{
+				cout << " " <<words[i];
+			}
+			cout << endl;
+		}
+	}
+}
+
+bool oneCharOff( const string & word1,
+const string & word2)
+{
+	if ( word1.length() != word2.length())
+		return false;
+	
+	int diffs = 0;
+	
+	for ( int i = 0; i < word1.length(); i++)
+		if ( ++diffs > 1)
+			return false;
+			
+	return diffs == 1;
+} 
+```
+
+其核心问题在于从一个包含89000个单词的数组来构造map。
+```
+//计算一个键值为单词，值为单词组（该单词组只有一个字母不同）
+//该蛮力测试使用了4层循环，89000个单词对应运行时间为6.5min
+map< string, vector<string>> computeAdjacentWords( const vector<string> & words)
+{
+	map< string, vector<string>> adjWords;
+	
+	for ( int i = 0; i < words.size(); i++)
+	{
+		for ( int j = i + 1; j < words.size(); j++)
+		{
+			if ( oneCharOff( word[i],
+						     word[h]))
+			{
+				adjWords[ words[i]].push_back( words[j]);
+				adjWords[ words[j]].push_back( words[i]);
+			}
+		}
+	}
+	
+	return adjWords;
+}
+```
+
+```
+//方法二：仍然采用一个四次方的算法，但是通过采用比较其词组长度提高了一点速度，大约为77s
+map< string, vector<string>> computeAdjacentWords( const vector<string> & words)
+{
+	map< string, vector<string>> adjWords;
+	map< int , vector<string>> wordsByLength;
+	
+	//根据数组长度进行分组
+	for ( int i = 0; i < word.size(); i++)
+		wordsByLength[ words[i].length()].push_back( words[i]);
+		
+	//对每个组单独处理
+	map< int, vector<string>>::const_iterator itr;
+	for ( itr = wordsByLength.begin(); itr != wordsByLength.end(); ++itr)
+	{
+		const vector<string> & groupWords = itr->second;
+		
+		for ( int i = 0; i < groupWords.size(); i++)
+			for ( itn j = i + 1; j < groupWords.size(); j++)
+				if ( oneCharOff( groupWords[i], groupWords[j]))
+				{
+					adjWords[ groupWords[i]].push_back( groupWords[j]);
+					adjWords[ groupWords[j]].push_back( groupWords[i]);
+				}
+	}
+	
+	return adjWords;
+}
+```
+
+第三个算法更加复杂一些，使用了附加的map。将单词按照长度分组，然后对每个组进行分别操作；假设目前研究长度为4的单词，首先，我们需要找到wine和nine这种只有一个字符不同的单词对；实现：对每一个长度为4的单词，删除第1个字母，保留剩下三个字母的样本。生成一个map，其中键是这个样本，其值是所有这个样本单词的vector；例如四字母单词组的第一个字母，样本"ine"对应“dine”、“fine”、“nine”等。样本"oot"对应“boot”、“foot”等。最后这个map值，即每一个单独的vector形成了一个单词组，在这个组的每一个单词都可以通过一个字符的替换变成其它单词，于是，最后一个map就构造出来，很容易来遍历和添加项到所处理的原始map中。然后我们使用一个新map来处理4字字母单词的第二个字母，然后是第三个和第四个字母；
+一般程序架构如下：
+```
+for each group g, containing words of length len
+	for each position p ( ranging from 0 to len - 1)
+	{
+		Make an empty map<string, vector<string>> repsToWords
+		for each word w
+		{
+			Obtain w's representative by removing position pair
+			Update repsToWords
+		}
+		Use cliques in repsToWords to update adjWords map
+	}
+```
+
+```
+//Solution 3:Costs O(NlogN)
+map< string, vector<string>> computeAdjacentWords( const vector<string> & words)
+{
+	map< string, vector<string>> adjWords;
+	map< int , vector<string>> wordsByLength;
+	
+	//根据长度分组
+	for ( int i = 0; i < word.size(); i++)
+		wordByLength[ word[i].length()].push_back( word[i]);
+	
+	//对每个组单独处理
+	map< int, vector<string>>::const_iterator itr;
+	for ( itr = wordsByLength.begin(); itr != wordsByLength.end(); ++itr)
+	{
+		const vector<string> & groupWords = itr->second;
+		int groupNum = itr->first;
+		
+		//对每个组中的每个点进行处理
+		for ( int i = 0; i < groupNum; i++)
+		{
+			//删除指定位置上的一个字符，计算其样本值
+			//所有具有相同样本值的单词都是邻近的，所以填充出一个新的map
+			map< string, vector<string>> repToWord;
+			
+			for ( int j = 0; j < groupWords.size(); j++)
+			{
+				string rep = groupWords[ j];
+				rep.erase( i, 1);
+				repToWord[ rep].push_back( groupWords[j]);
+			}
+			
+			//对一个单词组在map中进行寻找
+			map< string, vector<string>>::const_iterator itr2;
+			for ( itr2 = repToWord.begin(); itr2 != repToWord.end(); ++itr2)
+			{
+				const vector<string> & clique = itr2->second;
+				if ( clique.size() >= 2)
+					for ( int p = 0; p < clique.size(); p++)
+						for ( int q = p + 1; q < clique.size(); q++)
+						{
+							adjWords[ clique[ p]].push_back( clique[ q]);
+							adjWords[ clique[ q]].push_back( clique[ p]);
+						}
+			}
+		}
+	}
+	
+	return adjWords;
+}
+```	
+	
+## 第5章 散列
+本章讨论散列表(Hash Table)，它只支持一部分二叉查找树的操作。散列表的实现叫做散列(Hashing)。散列是一种以常数平均时间执行插入/查找和删除的技术。但是，散列不会支持那些需要进行排序信息的操作。
+
+1. 基本思想
+理想的散列基本结构只不过是一个包含一些项的具有固定大小的数组。先前讨论过，查找一般是针对项的某个部分（即数据成员）进行，这部分称之为**键(key)**。我们将表的大小记录为TableSize,并将其理解为散列数据结构的一部分而不是浮动于全局的某个变量。通常的习惯是让表从0~TableSize-1之间变化（其后会解释原因）。
+
+将每个键映射到从0-TableSize-1范围内的某个数，并且将其放到合适的单元中。则这个映射就称为散列函数(hash function)，理想的情况下它能够保证**两个不同的键映射到不同的单元**。不过相对来说这种可能性极低，因为单元数目有限，而且键其实是用不完的。因此，我们需要寻找一个散列函数，让该函数在单元之间均匀的分配键。
+除了以上的思想之外，剩余需要解决**冲突(collision)**问题，即决定当两个键散列到同一个值时应该做什么以及如何确定散列大小。
+
+2. 散列函数：
+如果输入是整数键，则一般比较合理的方法是直接返回“Key mod Tablesize”，除非Key碰巧具有某些不理想的性质；在这种情况下，散列函数的选择需要仔细考虑。例如，如果表的大小为10而键的个位都是0，那么以上的标准散列函数就不是一个特别好的选择；其原因我们将在后面介绍。为了避免这种情况，好的方法通常是保证表的大小是素数。当输入的键为随机整数时，散列函数不仅运算比较简单，而且分配也相对均匀。
+通常情况下，键是字符串，这种情形下，散列函数需要进行仔细选择；
+一种方法：把字符串中的ascii码求和；
+```
+int hash( const string &key, int tablesize)
+{
+	int hashVal = 0;
+	
+	for ( int i = 0; i < key.length(); i++)
+		hashVal += key[ i];
+		
+	return hashVal % tableSize;	
+}
+```
