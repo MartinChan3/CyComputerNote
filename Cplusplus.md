@@ -27,3 +27,81 @@ public:
 };
 ```
 这个方法可以用来解决部分vector中没有想要的重载函数的问题；
+9. 借助函数模板化的排序算法导入实例。这样在使用时，只需要对比较器类进行带类型继承和isLessThan函数的实例化，就可以达到比较的效果；
+```
+//比较器基类
+template <typename Object>
+class Comparator
+{
+public:
+    virtual bool isLessThan( Object*, Object*) = 0;//纯虚函数，迫使后续函数对其进行实现；
+};
+
+//模板函数子类
+template <typename Object>
+void sort( QVector<Object> &vp, Comparator<Object>* fptr)
+{
+    if ( vp.size() <= 1) return;
+
+    for ( int j = 0; j < vp.size(); j++)
+    {
+        for ( int i = ( vp.size() - 1); i > j; --i)
+        {
+            if ( fptr->isLessThan( vp.data() + i, vp.data() + i - 1))
+                qSwap( vp[i], vp[i - 1]);
+        }
+    }
+}
+
+//实例化比较器
+class QPointComparator : public Comparator<QPoint> //有一个很精彩实例化继承
+{
+public:
+    bool isLessThan(QPoint* p1 , QPoint* p2)
+    {
+        if ( p1->x() < p2->x())
+            return true;
+        else
+            return false;
+    }
+};
+
+int main(int argc, char *argv[])
+{
+    QCoreApplication a(argc, argv);
+
+    QVector<QPoint> tGrp;
+    tGrp << QPoint( 4, 4)
+         << QPoint( 3, 3)
+         << QPoint( 2, 2);
+    qDebug() << tGrp;
+    QPointComparator comparator;
+    sort( tGrp, &comparator);
+    qDebug() << tGrp;
+
+    return a.exec();
+}
+
+```
+
+10. 可以使用多个函数模板，这样就释放掉了比较函数的比较器；模板其实是使用了动态编译的思想；
+9中涉及的模板类使用其比较器在调用时**必须使用指针：因为原始sort函数中导入的是原先的父类对象的内容** ；
+如果想要避免这种相对比较复杂的表示方法，可以直接使用双模版的模式，这里给出例子：
+```
+template <typename Object, typename Comparator>
+void sort( QVector<Object> &vp, Comparator cmp)
+{
+    if ( vp.size() <= 1) return;
+
+    for ( int j = 0; j < vp.size(); j++)
+    {
+        for ( int i = ( vp.size() - 1); i > j; --i)
+        {
+            if ( cmp.isLessThan( vp.data() + i, vp.data() + i - 1))
+                qSwap( vp[i], vp[i - 1]);
+        }
+    }
+}
+```
+
+11. 部分无法访问的错误是因为没有权限访问，需要检查继承的方式是否为public，因为**默认的继承方式为private。**
