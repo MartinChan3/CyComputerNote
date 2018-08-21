@@ -126,3 +126,29 @@ IntPoint ipNext = (i == cnt ? path[0] : path[i]);
 19. 多项目的管理中，为了子项目生成插件，一般会使用global类来导出，其间使用了dllexport和dllimport来进行使用（__declspec(dllexport)/Q_DECL_EXPORT）
 
 20. 大型Qt文件的组织形式尚未明晰，需要反复确认练习；
+- showbuild是有必要的，基本上按照基础的形式就可以；
+- 在引用库文件的时候记得改成DESTDIR(目前)
+- 分离子项目主要是为了减少编译时间
+
+21. using用于引入一个命名空间或者一个命名空间内的一个方法；例如
+```
+using std::cout;
+void main()
+{cout << "U can use cout without std here";}
+```
+
+22. 目前QVector、QList等容器类当中，必须添加一部分例如等于符号等的运算符，来使得传统的类型得以添加；
+
+23. 平时编译，出现类定义错误时，一定要检查是否所有的类的头文件声明末尾处加上了“;”;
+
+24. Qt/QML背后的核心系统——元对象(meta-object),例如使用invokeMethod宏来标记那些可以被qml前端调用的函数；
+元对象本身主要是指描述另一个对象结构的对象，包含一个对象有多少个成员函数以及有哪些属性（QMetaObject），它是基于QObject、使用Q_OBJECT（进而实现信号与槽机制）以及元对象编译器(Meta-Object Compiler,moc)来实现的；
+
+25. 通过控制台的message输出可以看到
+- DESTDIR 目标输出的文件夹，包括lib/dll/exe
+- PWD 当前工程文件夹
+- OUT_PWD 只shadow-build文件夹
+
+26. qmake中Config配置ordered是指最终实际的编译顺序是按照SUBDIRS给的子项目顺序来进行编译；平时编写类似多文件输出的结构时，也应当按照类似的结构进行处理
+
+27. 时刻牢记：stl风格的vector与list都存在空的表头和表尾，对于QVector和QList也是同理；
