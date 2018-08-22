@@ -114,15 +114,16 @@ qss遵循的顺序完全是按照css2来进行规定的：
 > 计算选择器中的元素名(=c)
 > 忽略伪状态（忽略subcontrols）
 > 这样构成了一个a-b-c的三位数，决定了顺序
-> ```*             {}  /* a=0 b=0 c=0 -> specificity =   0 */
-LI            {}  /* a=0 b=0 c=1 -> specificity =   1 */
-UL LI         {}  /* a=0 b=0 c=2 -> specificity =   2 */
-UL OL+LI      {}  /* a=0 b=0 c=3 -> specificity =   3 */
-H1 + *[REL=up]{}  /* a=0 b=1 c=1 -> specificity =  11 */
-UL OL LI.red  {}  /* a=0 b=1 c=3 -> specificity =  13 */
-LI.red.level  {}  /* a=0 b=2 c=1 -> specificity =  21 */
-#x34y         {}  /* a=1 b=0 c=0 -> specificity = 100 */
-```
+> ```
+> *             {}  /* a=0 b=0 c=0 -> specificity =   0 */
+> LI            {}  /* a=0 b=0 c=1 -> specificity =   1 */
+> UL LI         {}  /* a=0 b=0 c=2 -> specificity =   2 */
+> UL OL+LI      {}  /* a=0 b=0 c=3 -> specificity =   3 */
+> H1 + *[REL=up]{}  /* a=0 b=1 c=1 -> specificity =  11 */
+> UL OL LI.red  {}  /* a=0 b=1 c=3 -> specificity =  13 */
+> LI.red.level  {}  /* a=0 b=2 c=1 -> specificity =  21 */
+> #x34y         {}  /* a=1 b=0 c=0 -> specificity = 100 */
+> ```
 
 ## 层级关系
 样式表可以应用于QApplication的子对象或者父对象，而任意的widget的样式表都是通过融合父类或者祖父类对象而形成的；
