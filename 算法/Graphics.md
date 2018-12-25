@@ -138,4 +138,163 @@ bool IsPointOnLineSegment(const LineSeg& ls, const Point& pt)
 }
 ```
 
+4. 直线段是否有交线   
+**思路**：1） 快速排斥实验（矩形排斥验证）；2）**相互**跨立实验；
+跨立实验的基本依据，是如果两线相交，则其中一条线段的两个端点一定位于另一条线段的两侧；最终符合(( P1 - Q1 ) × ( Q2 - Q1 )) * (( P2 - Q1 ) × ( Q2 - Q1 )) < 0类似的形式。**并且注意，这样的跨列一般都是相互的**。
+![screenShot.png](https://i.loli.net/2018/12/20/5c1b66201836f.png)
+首先是快速排斥算法:
+```
+//本质为若两个矩形分离，则一定在各个方向（x与y）的一个矩形的极值必定大于另一个矩形的相反的极值
+bool IsRectIntersect(const Rect& rc1, const Rect& rc2)
+{
+	return (    max(rc1.p1.x, rc1.p2.x) >= min(rc2.p1.x, rc2.p2.x)
+			 && max(rc2.p1.x, rc2.p2.x) >= min(rc1.p1.x, rc1.p2.x)
+			 && max(rc1.p1.y, rc1.p2.y) >= min(rc2.p1.y, rc2.p2.y)
+			 && max(rc2.p1.y, rc2.p2.y) >= min(rc1.p1.y, rc1.p2.y));
+}
+```
+接下来就可以给出完整的算法：
+```
+bool IsLineSegmentIntersect(const LineSeg& ls1, const LineSeg& ls2)
+{
+	if(IsLineSegmentExclusive(ls1, ls2)) //排斥实验
+    {
+        return false;
+    }
 
+     //( P1 - Q1 ) ×'a1?( Q2 - Q1 )
+     double p1xq = CrossProduct(ls1.ps.x - ls2.ps.x, ls1.ps.y - ls2.ps.y,
+                                ls2.pe.x - ls2.ps.x, ls2.pe.y - ls2.ps.y);
+
+    //( P2 - Q1 ) ×'a1?( Q2 - Q1 )
+    double p2xq = CrossProduct(ls1.pe.x - ls2.ps.x, ls1.pe.y - ls2.ps.y,
+                               ls2.pe.x - ls2.ps.x, ls2.pe.y - ls2.ps.y);
+
+    //( Q1 - P1 ) ×'a1?( P2 - P1 )
+    double q1xp = CrossProduct(ls2.ps.x - ls1.ps.x, ls2.ps.y - ls1.ps.y,
+                               ls1.pe.x - ls1.ps.x, ls1.pe.y - ls1.ps.y);
+
+    //( Q2 - P1 ) ×'a1?( P2 - P1 )
+    double q2xp = CrossProduct(ls2.pe.x - ls1.ps.x, ls2.pe.y - ls1.ps.y,
+                               ls1.pe.x - ls1.ps.x, ls1.pe.y - ls1.ps.y);
+
+    return ((p1xq * p2xq <= 0.0) && (q1xp * q2xp <= 0.0));
+}
+```
+
+5. 点是否位于多边形内还是多边形外还是多边形上
+**思路**：射线法，但是需要避免类似以下情况的问题
+![](http://img.my.csdn.net/uploads/201112/25/0_1324825108e0jt.gif)
+文章提出3原则：
+1. 若P在一条边上， 则判定点在多边形内；
+2. 如果P发出的水平射线穿过一个线段的两端，则以**“上闭下开”**为原则进行判断；
+3. 若与P1P2平行，则忽略该边
+文中给出了基本的流程图：
+![](http://img.my.csdn.net/uploads/201112/25/0_1324825164iT00.gif)
+基本代码如下：
+```
+bool IsPointInPolygon(const Polygon& py, const Point& pt)
+{
+	assert(py.IsValid()); //先考虑可能出现的窄边的情况
+	
+	int count = 0; 
+	LineSeg ll = LineSeg(pt, Point(-INFINITE, pt.y));//构建无限长的射线
+	for (int i = 0; i < py.GetPolyCount(); i++)
+	{
+		//当前和下一个点组成线段P1P2
+		LineSeg pp = LineSeg(py.pts[i], py.pts[(i + 1) % py.GetPolyCount()]);
+		if (IsPointOnLineSegment(pp,pt))
+		{
+			return true;
+		}
+		
+		if (!pp.IsHorizontal())
+		{
+			if (IsSameFloatValue(pp.ps.y, pt.y) && (pp.ps.y > pp.pe.y))
+			{
+				count++;
+			}
+			else if (IsSameFloatValue(pp.pe.y, pt.y) && (pp.pe.y > pp.ps.y))
+			{
+				count++;
+			}
+			else
+			{
+				if (IsLineSegmentIntersect(pp, ll))
+				{
+					count++;
+				}
+			}
+		}
+	}
+	
+	return ((count % 2) == 1);
+}
+```
+
+5. 直线绘制算法：
+一. DDA
+思路：按照斜率步进推进(分斜率大于1与小于1两种情况，按照增长快的方向进行步进)
+![DDA算法例子](https://upload-images.jianshu.io/upload_images/11218530-edecd9635ec7b04e?imageMogr2/auto-orient/strip%7CimageView2/2/w/741)
+```
+void PaintArea::drawLineDDA(QPainter &painter, int x0, int y0, int xEnd, int yEnd)
+{
+	int dx = xEnd - x0, dy = yEnd - y0, steps, k;
+	float xIncrement, yIncrement, x = x0, y = y0;
+	if (qAbs(dx > dy))
+		steps = qAbs(dx);
+	else
+		steps = qAbs(dy);
+	
+	xIncrement = float(dx) / float(steps);
+	yIncrement = float(dy) / float(steps);
+	
+	painter.drawPoint(round(x), round(y)); //首点
+	for (k = 0; k < steps; k++)
+	{
+		x += xIncrement;
+		y += yIncrement;
+		painter.drawPoint(round(x), round(y));
+	}
+}
+```
+
+二. Bresenham法
+思路：按照斜率增长特性决定下一个点的位置
+void PaintArea::drawLineBresenham(QPainter & painter, int x0, int y0, int x1, int y1)
+{
+	int x, y, dx, dy, e;
+	if (qAbs(x0 - xEnd) > qAbs(y0 - yEnd))
+	{
+		dx = xEnd - x0; dy = yEnd - y0; e = -dx;
+		x = x0; y = y0; 
+		for (int i = 0; i <= dx; i++)
+		{
+			painter.drawPoint(x, y);
+			x++;
+			e += 2 * dy; 
+			if (e >= 0)
+			{
+				y += 1;
+				e = e - 2 * dx;
+			}
+		}	
+	}
+	else
+	{
+		dx = xEnd - x0; dy = yEnd - y0; e = -dx;
+		x = x0; y = y0;
+		for (int i = 0; i <= dx; i++)
+		{
+			painter.drawPoint(x, y);
+			y++;
+			e += 2 * dx;
+			if (e >= 0)
+			{
+				x += 1;
+				e = e - 2 * dy;
+			}
+		}
+	
+	}
+}
