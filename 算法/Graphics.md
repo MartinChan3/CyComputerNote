@@ -232,7 +232,7 @@ bool IsPointInPolygon(const Polygon& py, const Point& pt)
 }
 ```
 
-5. 直线绘制算法：
+6. 直线绘制算法：
 一. DDA
 思路：按照斜率步进推进(分斜率大于1与小于1两种情况，按照增长快的方向进行步进)
 ![DDA算法例子](https://upload-images.jianshu.io/upload_images/11218530-edecd9635ec7b04e?imageMogr2/auto-orient/strip%7CimageView2/2/w/741)
@@ -261,6 +261,9 @@ void PaintArea::drawLineDDA(QPainter &painter, int x0, int y0, int xEnd, int yEn
 
 二. Bresenham法
 思路：按照斜率增长特性决定下一个点的位置
+[维基百科](https://zh.wikipedia.org/wiki/%E5%B8%83%E9%9B%B7%E6%A3%AE%E6%BC%A2%E5%A7%86%E7%9B%B4%E7%B7%9A%E6%BC%94%E7%AE%97%E6%B3%95)   
+维基百科中给出基本的一个思路是：1）先讨论斜率<=1的情况；2）讨论k>1的情况，只需要意识到是和y=x进行对称即可，即交换x、y坐标的内容；3）负斜率的话需要进行首尾坐标的交换。该过程是一个扩展到一般化的结果的流程。最后为了减少浮点数运算，采取整个浮点数乘以斜率达到化解的方法（改变error初始，以及将error计算由递增改为递减做法）
+```
 void PaintArea::drawLineBresenham(QPainter & painter, int x0, int y0, int x1, int y1)
 {
 	int x, y, dx, dy, e;
@@ -298,3 +301,164 @@ void PaintArea::drawLineBresenham(QPainter & painter, int x0, int y0, int x1, in
 	
 	}
 }
+```
+
+7. 画圆方法   
+画圆算法基本都是讨论8分象限的（x,y）（x=0与y=x在第一象限内所夹）象限内的内容，再扩展到其余共八个象限。       
+一.中点画圆法   
+核心原理为判断右侧的中点是否为相关的内容，基本思路为构造判别式来比较下一个点的具体位置[csdn](https://blog.csdn.net/zl908760230/article/details/53954746)   
+![screenShot.png](https://i.loli.net/2018/12/26/5c2333be2841c.png)   
+根据判别式内容可以得到基本的一个构造方法为：
+1. 输入圆半径r；
+2. 计算初始值d = 1.25 - r，x = 0, y = r,画出点(x,y);
+3. 若x < y(不超过y = x)这条线，则继续，否则结束；
+4. 求下一个点的d值：若d < 0,则先将d更新为d+2x+3，再将(x,y)更新为(x+1,y+1);否则先将d更新为d+2(x-y)+5，再将(x, y)更新为(x+1, y-1)。
+5. 画点(x,y),返回3；   
+   
+改进的原则仍然为尽可能避免浮点数的运算，所以给出e = d - 0.25,这样可以将所有的d相关浮点数判断和运算替换为e相关的整形数据的运算；   
+```
+void wholeC(int xc, int yc, int x, int y, int color) {
+	putpixel(xc + x, yc + y, color); putpixel(xc + x, yc - y, color);
+	putpixel(xc - x, yc + y, color); putpixel(xc - x, yc - y, color);
+	putpixel(xc + y, yc + x, color); putpixel(xc + y, yc - x, color);
+	putpixel(xc - y, yc + x, color); putpixel(xc - y, yc - x, color);
+}
+void Mcircle(int xc, int yc, int r, int color) {
+	int x = 0, y = r, d = 1 - r;
+	wholeC(xc, yc, x, y, color);
+	while (x <= y) {
+		if (d < 0) {
+			d += 2 * x + 3;
+			x++;
+		}
+		else {
+			d += 2 * (x - y) + 5;
+			x++;
+			y--;
+		}
+		wholeC(xc, yc, x, y, color);
+	}
+}
+```
+
+8. 多边形区域填充算法
+一. 递归种子填充(seed filling)；
+4-联通算法获得的结果可能反而是正确的（而8-联通算法可能错误）
+1) 注入填充算法(Flood Fill Algorithm): 注入填充算法并不强调边界，单纯从指定位置开始，将某种指定颜色替换为对应的颜色；
+```
+typedef struct tagDIRECTION
+{
+	int x_offset;
+	int y_offset;
+}DIRECTION;
+
+DIRECTION direction_8[] = { {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1} };
+
+void FloodSeedFill(int x, int y , int old_color, int new_color)
+{
+	if (GetPixelColor(x, y) == old_color)
+	{
+		SetPixelColor(x, y, new_color);
+		for (int i = 0; i < COUNT_OF(direction_8); i++)
+		{
+			FloodSeedFill(x + direction_8[i].x_offset, 
+						  y + direction_8[i].y_offset,
+						  old_color,
+						  new_color);
+		}
+	}
+}
+```
+2) 边界填充算法(Boundary Fill Algorithm):本质和注入填充相同，只是在于有边界确认，即结束的条件不同；
+```
+void BoundaryFillAlgorithm(int x, int y , int old_color, int boundary_color)
+{
+	int curCol = GetPixelColor(x, y);
+	if ((curCol != boundary_color) && (curCol != new_color))
+	{
+		SetPixelColor(x, y, new_color);
+		for (int i = 0; i < COUNT_OF(direction_8); i++)
+		{
+			BoundaryFillAlgorithm(x + direction_8[i].x_offset, 
+						          y + direction_8[i].y_offset,
+						          old_color,
+						          new_color);
+		}
+	}
+}
+```
+
+二. 扫描线填充算法
+1) 扫描线种子填充算法[csdn](https://blog.csdn.net/orbit/article/details/7343236)
+为了避免种子填充方式会存在大量的栈空间存储相邻点，而且递归的次数巨大；扫描线种子填充算法采用沿水平扫描线方式填充像素，一段一段的来处理联通的相邻点。这样只需要将每个水平线段的起点像素压入栈，而不需要将当前处理点周围所有相邻点压入栈，极大地节省了栈的空间。是一种避免递归，提高效率的方式；
+核心思路：从给定的种子点(x, y)开始向左向右两个方向填充种子点所在扫描线上位于给定区域的一个区段，同时记下这个区段的范围[xLeft, xRight]，然后确定和这一个区段相联通的上、下两条扫描线上位于给定区域内的区段，并依次保存下来。反复这个过程，直到填充结束。
+> 扫描线种子填充算法四个步骤：
+> 1. 初始化一个空栈存放种子点，将种子点(x, y)压入栈；
+> 2. 判断栈是否为空，若为空则结束；否则取出栈顶元素作为当前扫描线的种子点(x,y),y是当前的扫描线；
+> 3. 从种子点(x, y)出发，沿当前扫描线向左、右两个方向填充，直到边界。分别标记左右端点的坐标为xLeft和xRight;
+> 4. 分别检查与当前扫描线相邻的y-1和y+1两条扫描线在区间[xLeft, yLeft]中的像素，从xLeft开始向xRight方向搜索。若存在非边界且未填充的像素点，则找出这些相邻像素点中**最右边的一个，并将其种子压入栈，然后返回第二步**   
+算法：   
+```
+void ScanLineSeedLine(int x, int y, int new_color, int boundary_color)
+{
+	std::stack<Point> stk;
+	
+	stk.push(Point(x, y)); //第1步，种子点入栈
+	while (!stk.empty())
+	{
+		Point seed = stk.top(); //第2步，取当前种子点
+		stk.pop();
+		
+		//第3步，向左右填充
+		int count = FillLineRight(seed.x, seed.y, new_color, boundary_color);//向右填充
+		int xRight = seed.x + count - 1;
+		count = FillLineLeft(seed.x - 1, seed.y, new_color, boundary_color);//向左填充
+		int xLeft = seed.x - count;
+		
+		//第4步，处理相邻两条扫描线
+		SearchLineNewSeed(stk, xLeft, xRight, seed.y - 1, new_color, boundary_color);
+		SearchLineNewSeed(stk, xLeft, xRight, seed.y + 1, new_color, boundary_color);
+	}
+}
+
+void SearchLineNewSeed(std::stack<Point> &stk, int xLeft, int xRight,
+					   int y, int new_color, int boundary_color)
+{
+	int xt = xLeft;
+	bool findNewSeed = false;
+	
+	while(xt <= xRight)
+	{
+		findNewSeed = false;
+		while (IsPixelValid(xt, y, new_color, boundary_color) && (xt < xRight))
+		{
+			findNewSeed = true;
+			xt++;
+		}
+		if (findNewSeed)
+		{
+			if (IsPixelValid(xt, y, new_color, boundary_color) && (xt == xRight))
+				stk.push(Point(xt, y));
+			else
+				stk.push(Point(xt - 1, y));
+		}
+	}
+	
+	//向右跳过内部无效的点(处理内部右侧有障碍点的情况)
+	int xspan = SkipInvalidInLine(xt, y, xRight, new_color, boundary_color);
+	xt += (xspan == 0) ? 1 : xspan;
+}
+```
+2) 扫描线算法（有序边表法）:适用于矢量图填充，不需要种子点，适合计算机自动图形处理的场合；[csdn](https://blog.csdn.net/orbit/article/details/7368996)   
+基本思想：由水平扫描线从上到下(或者从下到上)扫描一个由多条首尾相连的线段构成的多边形，每根扫描线和多边形的边界产生一系列的交点，若将这些交点按照x坐标排序，然后将排序后的点两两成对，作为线段的两个交点，以所填的颜色绘制水平线；多边形被扫描完毕后，整个多边形的填充也就完成了。   
+> 步骤：  
+> 求交：计算扫描线和多边形交点
+> 交点排序：对所得交点按照x值从小到大排序；
+> 颜色填充：对排序后的交点两两组成一个水平线段，进行填充；
+> 判断是否完成，若否则继续处理   
+核心在于第一步，需要以尽量少的计算量求出交点；其次交点的步进计算最好是整数，方便光栅设备输出；  
+两大特点：  
+- 每次只有相关的几条边可能有交点，不必对所有边进行求交计算；
+- 相邻的扫描线和同一直线段的交点存在步进关系，这个关系与直线段所在直线的斜率有关；
+第一点显而易见，为了减少计算量，扫描线算法需要维护一张由“活动边”组成的表，称为“活动边表(AET)”。   
+第二点可以证明，假设当前扫描线和多边形某一条边的交点已经通过直线段求交算法计算出来，得到的交点坐标若为(x,y)，则下一条扫描线和这条边的交点不需要再进行求交计算。通过步进关系可以直接得到新的交点为(x+δx, y+1);
