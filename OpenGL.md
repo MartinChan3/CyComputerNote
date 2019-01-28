@@ -221,4 +221,90 @@ else
 stbi_image_free(data);
 ```
 
+5. 应用纹理：类似于先前告知OpenGL中VBO中数据的组织形式，直接告知每个坐标最后两个坐标为纹理坐标，并依次调整补偿为8；同时，需要在着色器中告诉OpenGL具体使用哪个纹理，这里在片段着色器中使用**采样器(Sampler2D)**，以纹理类型作为后缀(sampler2D),在使用VAO绑定绘制之前，调用``glBindTexture(GL_TEXTURE_2D, texture);``来启用2d纹理（牢记，包括2d纹理在内都是状态机的概念）。   
+6. 纹理单元：这里指出为何sampler2D是uniform但是不使用普通的glUniform对其进行赋值；转而使用glUniform1i，**可以给纹理采样器分配一个位置值**，这样我们能够在一个片段着色器中设置多个纹理。一个纹理的位置值通常我们称为纹理单元(Texture Unit)。一个纹理的默认纹理单元是0，它是默认激活的纹理单元；   
+纹理单元的核心目标是让用户能够使用多于一个的纹理；如果我们想要使用多个纹理，可以使用激活纹理单元的方法，（类似状态机似的）再去绑定对应的纹理； 
+```
+glActiveTexture(GL_TEXTURE0); //绑定前激活纹理单元
+glBindTexture(GL_TEXTURE_2D, texture);
+```  
+Tip: OpenGL保证了至少有16个纹理单元可以使用，可以激活从GL_TEXTURE0到GL_TEXTURE15。可以使用类似指针的方式调用邻近的纹理；   
+
+### 变换   
+1. 向量： 方向+大小；
+2. 向量和标量计算；
+3. 向量取反；
+4. 向量加减；
+5. 向量长度：引入了单位向量概念；
+6. 向量乘法：两种乘法——点乘和叉乘；
+> 点乘：a * b = XaXb + YaYb + ZaZb = 模a * 模b * cosθ
+> 叉乘：a · b = (YaZb - ZaYb, ZaXb - XaZb, XaYb - YaXb)，方向由右手定则决定
+7. 矩阵的运算；
+###  矩阵和向量相乘：向量的本质可以理解为N*1大小的矩阵，在OpenGL中可以表示颜色或者纹理坐标，**即只有一列的坐标**。这样，我们有了**变换(Transform)**概念的计算基础，这样极大的方便了使用；  
+1. 单位矩阵；
+2. 缩放：往往使用不均匀缩放，矩阵如下   
+$$
+\begin{bmatrix} \color{red}{S_1} & \color{red}0 & \color{red}0 & \color{red}0 \\ \color{green}0 & \color{green}{S_2} & \color{green}0 & \color{green}0 \\ \color{blue}0 & \color{blue}0 & \color{blue}{S_3} & \color{blue}0 \\ \color{purple}0 & \color{purple}0 & \color{purple}0 & \color{purple}1 \end{bmatrix} \cdot \begin{pmatrix} x \\ y \\ z \\ 1 \end{pmatrix} = \begin{pmatrix} \color{red}{S_1} \cdot x \\ \color{green}{S_2} \cdot y \\ \color{blue}{S_3} \cdot z \\ 1 \end{pmatrix}
+$$   
+3. 位移：在原有基础进行位移，矩阵实现形式如下
+$$
+\begin{bmatrix}  \color{red}1 & \color{red}0 & \color{red}0 & \color{red}{T_x} \\ \color{green}0 & \color{green}1 & \color{green}0 & \color{green}{T_y} \\ \color{blue}0 & \color{blue}0 & \color{blue}1 & \color{blue}{T_z} \\ \color{purple}0 & \color{purple}0 & \color{purple}0 & \color{purple}1 \end{bmatrix} \cdot \begin{pmatrix} x \\ y \\ z \\ 1 \end{pmatrix} = \begin{pmatrix} x + \color{red}{T_x} \\ y + \color{green}{T_y} \\ z + \color{blue}{T_z} \\ 1 \end{pmatrix}
+$$   
+Tip：引入的第四维向量称作为**齐次坐标(Homogeneous Coordinates)**, 后面可以看到，当w为1.0时，是允许该矩阵往3d向量上进行位移，为0的时候就不允许，并且退化为方向向量；   
+4. 旋转，基本的思路是先以特定的旋转轴（xyz三轴）为基础，进行最基本的旋转，然后三者叠加相乘；以下先给出基于z轴的旋转矩阵计算结果：   
+$$
+\begin{bmatrix} \color{red}{\cos \theta} & - \color{red}{\sin \theta} & \color{red}0 & \color{red}0 \\ \color{green}{\sin \theta} & \color{green}{\cos \theta} & \color{green}0 & \color{green}0 \\ \color{blue}0 & \color{blue}0 & \color{blue}1 & \color{blue}0 \\ \color{purple}0 & \color{purple}0 & \color{purple}0 & \color{purple}1 \end{bmatrix} \cdot \begin{pmatrix} x \\ y \\ z \\ 1 \end{pmatrix} = \begin{pmatrix} \color{red}{\cos \theta} \cdot x - \color{red}{\sin \theta} \cdot y  \\ \color{green}{\sin \theta} \cdot x + \color{green}{\cos \theta} \cdot y \\ z \\ 1 \end{pmatrix}
+$$   
+这样的旋转模型已经很完善，但是可能会导致另一个问题——万向节锁死。更优化的矩阵是沿着任意一个轴，进行旋转而不是对一系列旋转轴进行复合。但是其表达相当复杂（而且在数学上无法完全解决万向节锁死人问题）；   
+重点来了，真正的万向节死锁解决方法为**四元数(Quaternion)**，兼具有高效率和安全性，后面会进行讨论；   
+### 矩阵的组合   
+可以通过组合方式实现变化(例如先缩放和再位移)   
+### 实践   
+1. GLM: 引入GLM库
+2. 基本运算；
+3. 牢记变换的顺序会影响最终缩放的效果；   
+
+## 坐标系统   
+引言：前文已经强调过，顶点着色器会将xyz三轴坐标转换为标准化设备坐标，进而传输数据进光栅，转换为最终的二维坐标或者像素；   
+从标准化设备坐标到最终的像素坐标，仍然需要经历几个过程(被变换到多个坐标系统);这主要是由于，某些特殊的操作需要在特定的坐标系下操作更方便；这样的坐标系一共有五个：
+> **局部空间(Local Space)**,或被称为物体空间；
+> **世界空间(World Space)**
+> **观察空间(View Space)**，或被称为视觉空间；
+> **裁剪空间(Clip Space)**
+> **屏幕空间(Screen Space)**  
+### 概述    
+为了将坐标从一个坐标系变换到另一个坐标系，分别需要使用三个重要的坐标系**模型(Model)**、**观察(View)**、**投影(Projection)**,下面这张图非常好的解释了各个坐标和变换之间的关系   
+![空间坐标系变换](https://learnopengl-cn.github.io/img/01/08/coordinate_systems.png)   
+- 局部坐标是指物体相对于局部原点的坐标，也是物体起始的坐标；（很像是3d零件中单独part绘制）   
+- 下一步是变换为世界空间坐标(使用Model矩阵)，即将所有部件放在一个更大的范围内进行绘制；（类似3d装配中导入各个零件）   
+- 世界坐标转换为观察坐标(使用View矩阵)，使得每个坐标都是从摄像机或者说观察者的角度进行观察的；  
+- 坐标到达观察空间后，我们需要将其投影到裁剪坐标，裁剪坐标会被处理到1.0到-1.0的范围内，并判断哪些点会出现在屏幕上；   
+- 最后我们将裁剪坐标变换为屏幕坐标，我们会使用一个**视口变换(Viewport Transform)**来把-1.0到1.0的内容发送到光栅器，将其转换为片段；      
+至此为止可以解释上述的为何使用多个坐标系方便，例如当需要对物体本身修改，则在局部空间中才说得通；如果要对一个物体相对于其他物体相对位置改变，则在世界坐标系中才说的通；
+
+### 局部空间   
+局部空间指的是物体所在的做包空空间；
+
+### 世界空间   
+为了将各个零件从局部空间上区分开来，从物体的坐标从局部变换到世界空间，这种变换即依赖模型矩阵；   
+模型矩阵是一种变换矩阵，它能够通过对物体进行位移、缩放、旋转来使它放置于本应在的位置或者朝向；   
+   
+### 观察空间   
+观察空间经常被人们称为OpenGL的**摄像机(Camera)**，所以有时候也被称为摄像机空间或者视觉空间；观察空间是将世界空间坐标转换为用户视野前方的坐标而产生的结果。这通常是由**一系列的位移和旋转**组成的，这样的变换组合使得特定的对象被变换到摄像机前方；这样的组合我们存储在一个观察矩阵中，我们将在下一节仔细讨论其实现；   
+
+### 裁剪空间   
+OpenGL一向希望所有坐标落在一个特定的范围内，范围之外的点都会被裁剪掉; 因为所有可见的坐标在-1.0到1.0之间不是特别直观，所以我们会指定自己的坐标集(Coordinate Set)并将它变换回标准化设备坐标系；  
+为了将顶点坐标从观察空间变换到裁剪空间，我们需要定义一个**投影矩阵(Projection Matrix)**，它指定了一个范围的坐标，比如每个维度上的-1000到1000。投影矩阵接着会在这个指定范围内容将坐标变换为标准化设备坐标(-1.0,1.0)的范围内。所有在这个范围外的坐标会被裁减掉。
+> Tip: 如果只是图元(Primitive), 例如三角形的一部分超出裁剪体积(Clipping Volume), 则OpenGL会重新构建这个三角形或者多个三角形，来让其能够适合这个裁剪范围；   
+
+由投影矩阵创建的**观察箱(Viewing Box)**被称为平截头体(Frustum), 每个出现在平截头体范围内的坐标都会出现在用户屏幕上； 将特定范围内的坐标转换到标准化设备坐标系过程称之为投影(Projection),因为使用投影矩阵能将3D坐标投影(Project)到很容易映射到2D的标准化设备中；   
+一旦所有顶点被变换到裁剪空间，最终的操作**透视除法(Perspective Division)**会被执行，整个过程我们将位置向量的x、y、z分量分别处以向量的齐次w分量；透视除法是将4d裁剪空间坐标转换为3d标准化设备坐标的过程，这一步会在每一个顶点着色器运行的最后自动执行；   
+进行过该阶段后，最终坐标会被映射到屏幕空间(使用glViewport),并被赋予为片段；
+将观察坐标变换为裁剪坐标的投影坐标分为两种形式，分别对应两种不同的平截头体，分别称之为**正射投影矩阵**和**透视投影矩阵**；   
+  
+### 正射投影   
+正射投影
+
+
+
 
