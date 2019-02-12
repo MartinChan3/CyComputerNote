@@ -359,4 +359,213 @@ projection = glm::perspective(glm::radians(45.0f), screenWidth / screenHeight, 0
 这一小节极大的显示出了之前VAO和多种矩阵的价值：如果需要绘制多个相同的模型，不需要重新构建，只需要在模型矩阵中对每个对象变换到世界坐标的各个位置中； 
 
 
-## 摄像机   
+## 摄像机    
+OpenGL中本身没有摄像机(Camera)的概念，但是可以通过把场景所有物体向相反方向移动的方式来模拟出摄像机，产生一种观察者在移动的感觉。   
+### 摄像机/观察空间    
+当我们讨论摄像机/观察空间(Camera/View Space)时，本质上都在讨论**以摄像机视角为原点下， 场景中所有顶点的坐标**。观察矩阵(即上一章中的View Matrix)把所有的世界坐标变换为相对于摄像机位置与方向的观察坐标。  
+**要定义一个摄像机，需要：1）该摄像机在世界空间中的位置；2）观察的方向；3）一个指向它右侧的向量以及一个指向它上方的向量；**    
+![Camera](https://learnopengl-cn.github.io/img/01/09/camera_axes.png)   
+1. 摄像机位置：   
+直接用世界空间中指向摄像机位置的一个向量来代替摄像机位置，如下   
+```
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 1.0f);
+```
+> Tip: 不要忘记z轴是从屏幕指向于你的，如果摄像机向后移动，我们就沿着z轴的正方向移动；   
+2. 摄像机方向：   
+摄像机方向，指的是摄像机朝向哪个方向。本例中使摄像机指向场景原点，根据矢量减法原则，我们可以获得一个指向Z轴负方向的方向向量(正交化)；   
+```
+glm::vec3 cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);
+glm::vec3 cameraDirection = glm::normalize(cameraPos - cameraTarget);
+```   
+> Tip: **方向**向量(Direction Vector)并不是最好的名字，因为它实际上指向从它到目标向量的相反方向（译注：注意看前面的那个图，蓝色的方向向量大概指向z轴的正方向，与摄像机实际指向的方向是正好相反的）。*(简单来说，方向向量是由摄像机指向目标点的相反向量，用摄像机坐标减去指向点坐标获得)*   
+3. 右轴：   
+我们需要另一个向量称之为**右向量(Right Vector)**，它代表摄像机空间x轴的方向。为了获取右向量，我们使用一个小技巧：先定义一个上向量(Up vector)。接下来将上向量和第二步获得的方向向量进行叉乘，即可获得指向x轴正方向的那个向量（如果交换叉乘顺序就会得到相反指向x负方向的向量）
+```
+glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+glm::vec3 cameraRight = glm::normalize(glm::cross(up, cameraDirection));
+```   
+4. 上轴：   
+现在已经有x轴和z轴向量，那么获取摄像机真正意义上的正y轴向量就显得非常简单，直接用右向量和方向向量叉乘：   
+```
+glm::vec3 cameraUp = glm::cross(cameraDirection, cameraRight);
+```   
+这样的流程称作为**格拉姆-施密特正交化**，这些摄像机向量我们可以创建一个LookAt矩阵。   
+### LookAt   
+使用矩阵的好处之一在于，如果你使用了三个相互垂直(或者非线性)的轴定义了一个空间，你可以使用这三个轴外加一个平移的向量来创建一个矩阵，并且你可以用这个矩阵乘以任何向量来变换到那个坐标空间，而这就是LookAt矩阵所完成的工作，其形式如下：   
+![screenShot.png](https://i.loli.net/2019/02/12/5c623f5453366.png)   
+其中R是右向量，U是上向量，D是方向向量，而P是摄像机位置。值得注意的是，位置向量始终是相反的，因为我们最终希望吧世界平移到与我们自身移动相反方向。使用这个LookAt矩阵作为观察矩阵，可以方便的将所有世界坐标变换到刚刚定义的观察空间。LookAt矩阵就类似其名字表达的一样：他会创建一个看着给定目标的观察矩阵；   
+GLM方便的提供了lookAt函数来创建LookAt矩阵，只需要定义**1) 摄像机位置；2) 目标位置；3) （世界空间中的）上向量（创建右向量时）**，形式如下：   
+```
+glm::mat4 view;
+view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.0f),
+				   glm::vec3(0.0f, 0.0f, 0.0f),
+				   glm::vec3(0.0f, 1.0f, 0.0f));
+```   
+### 自由移动    
+接下来考虑自定义的移动情况，首先我们需要设定一个摄像机系统，这需要在程序开始定义三个摄像机变量：   
+```
+glm::vec3 cameraPos   = glm::vec3(0.0f, 0.0f,  3.0f);
+glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f,  0.0f);
+```   
+LookAt函数变为了：   
+```
+view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+```   
+（这里的cameraFront代指的是摄像机自身的瞄准点相对坐标，即向下看）   
+最后，需要在processInput中对各个按键进行捕获和处理：   
+```
+void processInput(GLFWwindow *window)
+{
+    ...
+    float cameraSpeed = 0.05f; // adjust accordingly
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        cameraPos += cameraSpeed * cameraFront;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        cameraPos -= cameraSpeed * cameraFront;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+}
+```   
+这里如果希望摄像机前后移动，则直接把位置向量加上或者减去方向向量，如果希望左右移动，则先通过叉乘来计算右向量(标准化，否则朝不同方向的速度不同)，并沿着其移动即可；   
+### 移动速度   
+目前乍一看，移动看上去没啥问题，但是实际上根据处理器处理能力不同，有些情况可能会绘制更多帧数/秒，即以更高的频率调用processInput函数。结果就是，根据配置不同，有些人移动很快，而有些人很慢。这种情况不是我们愿意看到的，接下来讨论如何在任何硬件上保持同一移动速度；   
+图形程序和游戏通常会跟踪一个时间差(deltaTime)变量，它存储了上一帧所需要的渲染时间。我们用所有的速度都去乘以deltaTime值，结果就是，如果我们的deltaTime很大，那么意味着我们上一帧花了相当长的时间，所以这一帧的速度需要变得更高来平衡渲染所用的时间。使用这种方法，无论你的电脑是快还是慢，摄像机的速度都会相应的平衡，这样每个用户的体验都是一样的。   
+![screenShot.png](https://i.loli.net/2019/02/12/5c626462ab80e.png)   
+
+### **视角移动**   
+只有键盘的移动了无生趣，是时候表演鼠标的功能了！~为了能够改变视角，我们核心是针对cameraFront变量进行修改。   
+#### 欧拉角   
+**欧拉角(Euler Angle)**是可以表示3D空间任意旋转的3个值，由（牛逼炸了的）莱昂哈德·欧拉在18世纪提出。一共有三种欧拉角：**俯仰角(Pitch)/偏航角(Yaw)/滚转角(Roll)**   
+![三种欧拉角](https://learnopengl-cn.github.io/img/01/09/camera_pitch_yaw_roll.png)   
+三种角分别绕xyz三轴旋转，俯仰角描述如何往上或者往下看，偏航角描述了向左向右看的程度，滚转角代表我们如何翻滚摄像机，通常在太空飞船的摄像机中使用。有了这三个欧拉角，我们就能计算3D空间中的任何旋转向量了。   
+通常摄像机系统只会讨论俯仰角和偏航角。   
+公式推导：正常情况下，以斜边为1的三角形，可以相当容易的推出，三角形对边长度为sinθ，而邻边长度为cosθ。   
+![三角推导](https://learnopengl-cn.github.io/img/01/09/camera_triangle.png)   
+先来讨论俯仰角： 想象自己站在xz平面上，望向y轴，基本上可以得到旋转pitch大小的角度变化会影响一根长度为1的线段3个分量投影为：
+```
+direction.y = sin(glm::radians(pitch));
+direction.x = cos(glm::radians(pitch));
+direction.z = cos(glm::radians(pitch));
+```   
+![俯仰角分量结果](https://learnopengl-cn.github.io/img/01/09/camera_pitch.png)    
+看看我们能否为偏航角找到需要的分量：  
+![偏航角分量结果](https://learnopengl-cn.github.io/img/01/09/camera_yaw.png)   
+非常容易的看到，其只会影响x轴和z轴的分量大小，所以得到了最后的表达形式为：  
+```
+direction.x = cos(glm::radians(pitch)) * cos(glm::radians(yaw)); // 译注：direction代表摄像机的前轴(Front)，这个前轴是和本文第一幅图片的第二个摄像机的方向向量是相反的
+direction.y = sin(glm::radians(pitch));
+direction.z = cos(glm::radians(pitch)) * sin(glm::radians(yaw));
+```
+两个欧拉角准备完毕，唯一的问题就在于如何获得俯仰角和偏航角了。    
+### 鼠标输入   
+偏航角和俯仰角是通过鼠标获得，**水平的移动影响偏航角，竖直的移动影响俯仰角**。它的基本原理就是，存储上一帧鼠标的位置，在当前帧中我们计算鼠标位置和上一帧的差值是多少。越大的差值，意味着越大的移动距离。   
+首先我们要告诉GLFW，它应该隐藏光标，并且**捕获（capture）**它。捕捉光标的意思是，如果焦点在你的程序上，光标应该停留在窗口中（除非程序失去焦点或者退出）。我们可以用一个简单的配置调用来完成：   
+```
+glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+```   
+在调用完整个函数后，无论怎么去移动鼠标，光标都不会显示，也不会离开窗口。这对于整个FPS摄像机系统非常完美，为了计算俯仰角和偏航角，我们需要让GLFW监听鼠标移动事件。和键盘输入类似，我们会引入一个回调函数来完成，函数的原型如下：   
+```
+void mouse_callback(GLFWwindow* window, double xpos, double ypos);
+```
+这里的xpos，ypos代表了鼠标当前的位置。当我们使用GLFW注册了回调函数之后，鼠标一移动mouse_callback就会被调用：``glfwSetCursorPosCallBack(window, mouse_callback);``  
+在处理FPS风格的摄像机鼠标输入时，我们必须在获取最终方向向量之前做以下几步：   
+> 1. 计算鼠标距上一帧的偏移量；   
+> 2. 把偏移量添加到摄像机的俯仰角和偏航角当中；   
+> 3. 把偏航角和俯仰角进行最大和最小值的限制；   
+> 4. 计算方向向量；   
+第一步是计算偏移量，我们首先要在程序中存储上一帧的位置，我们设初始值为屏幕中心(屏幕尺寸为800*600)：
+```
+float lastX = 400, lastY = 300;
+```   
+然后在回调函数中我们计算当前帧和上一帧鼠标位置的偏移量：   
+```
+float xoffset = xpos - lastX;
+float yoffset = lastY - ypos; //注意，这里是相反的，因为y坐标是从底部往顶部依次增大的？？？（这里测试下）   
+lastX = xpos;
+lastY = ypos;
+float sensitivity = 0.05f;
+xoffset *= sensitivity;
+yoffset *= sensitivity;
+```   
+灵敏度值影响着鼠标移动的大小，可以适当进行调整；   
+接下来我们将偏移量加到全局变量pitch和yaw上：   
+```
+yaw   += xoffet;
+pitch += yoffset;
+```
+第三步我们希望给摄像机添加一些限制，这样摄像机就不会发生奇怪的移动了，例如限制用户不能看超过高度89度（或低于89度）的内容，这样俯仰角限制的形式类似于：   
+```
+if (pitch > 89.0f)
+	pitch = 89.0f;
+if (pitch < -89.0f)
+	pitch = 89.0f;
+```   
+偏航角我们这里没有进行设定，是因为我们不希望限制用户的水平旋转，当然如果你希望进行限制也非常容易，模仿上述形式即可。    
+第四步，就是通过俯仰角和偏航角的计算来获得真正的方向向量：   
+```
+glm::vec3 front;
+front.x = cos(glm::radians(pitch)) * cos(glm::radians(yaw));
+front.y = sin(glm::radians(pitch));
+front.z = cos(glm::radians(pitch)) * sin(glm::radians(yaw));
+cameraFront = glm::normalize(front);
+```
+如果现在运行代码，会出现在窗口第一次获取焦点的时候摄像机会调一下，这是因为初始化的原因。这里使用一个简单的bool变量来判断是否是第一次进入循环，进而避免这种问题；   
+最后代码以这样的形式呈现：   
+```
+void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+{
+    if(firstMouse)
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; 
+    lastX = xpos;
+    lastY = ypos;
+
+    float sensitivity = 0.05;
+    xoffset *= sensitivity;
+    yoffset *= sensitivity;
+
+    yaw   += xoffset;
+    pitch += yoffset;
+
+    if(pitch > 89.0f)
+        pitch = 89.0f;
+    if(pitch < -89.0f)
+        pitch = -89.0f;
+
+    glm::vec3 front;
+    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    front.y = sin(glm::radians(pitch));
+    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    cameraFront = glm::normalize(front);
+}
+```   
+
+### 缩放   
+同样比较常见的操作是实现**缩放(Zoom)**功能。之前我们曾经强调透视视图中的视野（FOV，Field of View）决定了我们在场景中可以看到多大的范围。当视野变小，投影出来的空间就会减小，产生了放大(Zoom In)的感觉。我们使用鼠标的滚轮来放大。和鼠标移动以及键盘输入一样，我们使用一个鼠标滑轮的回调函数：   
+```
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+  if(fov >= 1.0f && fov <= 45.0f)
+    fov -= yoffset;
+  if(fov <= 1.0f)
+    fov = 1.0f;
+  if(fov >= 45.0f)
+    fov = 45.0f;
+}
+```   
+当滚动鼠标滚轮时，yoffset值代表数值滚动大小，我们限制缩放级别在1.0f到45.0f之间；   
+我们必须把每一帧的透视投影矩阵上传到GPU，但是是使用fov作为它的视野：   
+```
+projection = glm::perspective(glm::radians(fov), 800.0f / 600.0f, 0.1f, 100.0f);   
+```
+最后注册回调函数：
+glfwSetScrollCallback(window, scroll_callback);
