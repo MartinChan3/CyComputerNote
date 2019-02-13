@@ -2,6 +2,7 @@
 
 [LearnOpenGL CN](https://learnopengl-cn.github.io/)
 
+# 入门
 ## 第一章 介绍   
 1. 状态机(Status Machine)：OpenGL本身是一个巨大的状态机，**即通过一系列变量来描述OpenGL来如何运行**。OpenGL的状态往往被称为**上下文(Context)**。我们通常使用以下方法来改变OpenGL的状态：**设置选项→操作缓冲→使用当前OpenGL上下文渲染**。
 例如我们如果想要绘制的是线段而不是三角形，我们会通过改变一些上下文变量来改变OpenGL的状态，从而告诉OpenGL如何去绘图，一旦我们改变了OpenGL的状态为绘制线段，那么下一个绘制命令画出来就会画出线段而不是三角形；
@@ -569,3 +570,92 @@ projection = glm::perspective(glm::radians(fov), 800.0f / 600.0f, 0.1f, 100.0f);
 ```
 最后注册回调函数：
 glfwSetScrollCallback(window, scroll_callback);
+
+# 光照   
+## 颜色   
+现实世界有无数种颜色，常见的颜色分量可以由RGB三分量构成。现实当中肉眼所见的颜色并非实际物体的颜色，而是由物体反射一定光源投入后的颜色。   
+类似的原理被运用到图形学当中，我们引入白色的光源，用其和本身的颜色进行分量相乘，得到的就是最终自身的颜色：   
+```
+glm::vec3 lightColor(1.0f, 1.0f, 1.0f);
+glm::vec3 toyColor(1.0f, 0.5f, 0.31f);
+glm::vec3 result = lightColor * toyColor; // = (1.0f, 0.5f, 0.31f);
+```   
+由此看到，颜色的本质在于物体吸收了白色光源很大把一部分颜色，即**颜色是物体从一个光源反射的各个颜色分量的大小**。例如使用绿色光源，这个玩具颜色就会变成深绿色：   
+```
+glm::vec3 lightColor(0.0f, 1.0f, 0.0f);
+glm::vec3 toyColor(1.0f, 0.5f, 0.31f);
+glm::vec3 result = lightColor * toyColor; // = (0.0f, 0.5f, 0.0f);
+```   
+## 创建光照场景   
+我们仍然使用一个标准的立方体来进行投光的实验，这次我们不使用纹理。我们仍然从最精简的顶点着色器开始：
+```
+#version 330 core
+layout (location = 0) in vec3 aPos;
+
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+
+void main()
+{
+    gl_Position = projection * view * model * vec4(aPos, 1.0);
+}
+```   
+与先前不同的是，我们这次需要一个表示光源的立方体，我们会专门创建一个VAO。当然我们比较简单的能想到的，是让这个灯和其他物体使用同一个VAO，同时简单的对它的model（模型）矩阵进行一些变换。本文中由于灯本身数据简单，而且可能我们会对箱子的内容进行频繁更改，我们决定给灯一个新的vao。   
+```
+unsigned int lightVAO;
+glGenVertexArrays(1, &lightVAO);
+glBindVertexArray(lightVAO);
+// 只需要绑定VBO不用再次设置VBO的数据，因为箱子的VBO数据中已经包含了正确的立方体顶点数据
+glBindBuffer(GL_ARRAY_BUFFER, VBO);
+// 设置灯立方体的顶点属性（对我们的灯来说仅仅只有位置数据）
+glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+glEnableVertexAttribArray(0);
+```   
+接下来需要一个片段着色器：  
+```
+#version 330 core
+out vec4 FragColor;
+
+uniform vec3 objectColor;
+uniform vec3 lightColor;
+
+void main()
+{
+    FragColor = vec4(lightColor * objectColor, 1.0);
+}
+```   
+这个片段着色器从uniform变量中接受物体的颜色和光源的颜色。正如本文一开始讨论的那样，我们将光源的颜色和物体反射的颜色相乘。我们将物体颜色设置为珊瑚红色，光源为白色。   
+```
+// 在此之前不要忘记首先 use 对应的着色器程序（来设定uniform）
+lightingShader.use();
+lightingShader.setVec3("objectColor", 1.0f, 0.5f, 0.31f);
+lightingShader.setVec3("lightColor",  1.0f, 1.0f, 1.0f);
+```   
+值得注意的是，当我们修改顶点或者着色器片段后，灯的位置和颜色也会随之改变，这并不是我们想要的效果，所以我们需要另外绘制为灯专门设计的着色器，其顶点着色器和当前顶点着色器一样，但是片段着色器给灯定义了一个不变的白色常量，确保灯是一直亮着的：   
+```
+#version 330 core
+out vec4 FragColor;
+
+void main()
+{
+    FragColor = vec4(1.0); // 将向量的四个分量全部设置为1.0
+}
+```   
+当我们绘制物体时，我们会使用刚刚定义的光照着色器来绘制箱子（或者是其他物体）。当我们想要绘制灯的时候，我们会使用灯的着色器。之后的教程我们会逐渐更新这个光照着色器，让其能够慢慢地实现更加真实的效果。   
+使用这个灯立方体的意义，主要是为了让我们知道光源在场景中的具体位置，我们通常在场景中定义一个光源的位置，但这只是一个位置，并没有视觉意义。为了显示真正的灯，我们将表示光源的立方体绘制在和光源相同的地方，一直以纯白绘制，不受场景当中的光照影响；   
+我们声明一个全局vec3变量来表示光源在场景的世界空间坐标中的位置：   
+```
+glm::vec3 ligthPos(1.2f, 1.0f, 2.0f);
+```   
+然后我们把灯移动到这里，并且缩小一点：   
+```
+model = glm::mat4();   
+model = glm::translate(model, lightPos);
+model = glm::scale(model, glm::vec3(0.2f));
+```
+绘制灯立方体的代码大约如下：   
+```
+lampShader.use();   
+//
+```
