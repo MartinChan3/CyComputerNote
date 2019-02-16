@@ -771,7 +771,7 @@ Normal = mat3(transpose(inverse(model))) * aNormal;
 uniform vec3 viewPos;
 
 lightingShader.setVec3("viewPos", camera.Position);
-``
+```
 获得位置信息后，可以计算高光强度了。首先定义一个镜面强度变量，给镜面高光一个中等亮度颜色，不要让它过度影响本什么颜色；   
 ```
 float specularStrength = 0.5f;
