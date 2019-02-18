@@ -884,4 +884,91 @@ lightingShader.setVec3("light.specular", 1.0f, 1.0f, 1.0f);
 
 
 ## 光照贴图   
+上一章中我们将整体物体材质定义为一个整体，但是现实世界中的物体通常并不只包含一种材质，而是由多种材质组成。想象一辆汽车：外壳有光泽，车窗会反射周围的环境，车胎不会有光泽，所以它没有镜面高光。而车轮毂会很亮。这个例子反映了实际情况中，不同的部分有着不同的环境光/漫反射颜色。总之，这样的物体在不同的部件上有着不同的材质属性；   
+我们在本章引入**漫反射**和**镜面光**贴图。这样，我们队物体的反射分量（以及间接的对环境分量，它们总是一样的）和镜面光分量有着更精确的控制；   
+
+### 漫反射贴图    
+我们的目标是通过某种方式，对物体的每个单独片段设置反射颜色，这就是让我们根据片段在物体上的位置来获取颜色的系统，我们已经见过类似的形式，它就是纹理；在光照场景中，它通常叫做**漫反射贴图(Diffuse Map)**，它是一个表现了物体所有漫反射颜色的纹理图像；    
+构建漫反射贴图的方法和纹理教程中的方式是完全一样的，但是这次我们会将纹理存储为Material结构体中的一个sampler2D。我们将之前定义的vec3漫反射变量替换为该漫反射贴图；   
+> Tip:注意sampler2D其实是所谓的不透明类型（Opaque Type，指的是内容被封装），即类型不能被实例化，只能通过uniform变量来定义它。如果使用非设定uniform变量的办法，GLSL则会抛出一些奇怪的错误。    
+我们同样移除了环境光材质颜色向量，因为环境光颜色在几乎所有情况下都等于漫反射颜色，所以我们不需要将它们分开存储：   
+```
+struct Material {
+	sampler2D diffuse;
+	vec3 specular;   
+	float shininess;
+};
+
+in vec2 TexCoords;
+```
+注意，我们要在着色器片段中再次需要纹理坐标，所以我们会声明一个额外的输入变量。接下来我们只需要从纹理中采样片段的漫反射颜色值就可以：   
+```
+vec3 diffuse = light.diffuse * diff * vec3(texture(material.diffuse, TexCoords));
+```   
+同时将环境光的材质颜色设置为漫反射材质颜色同样的值。   
+```
+vec3 ambient = light.ambient * vec3(texture(material.diffuse, TexCoords));
+```   
+这样我们就可以基本获得试用漫反射贴图的全部步骤了，别看它简单，但是能极大的提升视觉品质。为了其正常工作，我们还需要使用纹理坐标来更新顶点数据，并将它们作为顶点数据传输到片段着色器，加载材质并且绑定合适的材质到纹理单元。   
+现在将更新后的数据传递到片段着色器内；   
+```
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aNormal;
+layout (location = 2) in vec2 aTexCoords;
+...
+out vec2 TexCoords;
+
+void main()
+{
+    ...
+    TexCoords = aTexCoords;
+}
+```   
+同时记得去更新两个VAO的顶点属性指针来匹配新的顶点数据，并且加载箱子图像为一个纹理。在绘制箱子之前，我们希望将要用的纹理单元赋值到material.diffuse这个uniform采样器当中，并且绑定箱子的纹理到这个纹理单元；   
+```
+lightShader.setInt("material.diffuse", 0);
+...
+glActiveTexture(GL_TEXTURE0);
+glBindTexture(GL_TEXTURE_2D, diffuseMap);
+```
+   
+### 镜面高光贴图    
+你可能会注意到，镜面高光看上去有些奇怪——因为木头本身不该有这么高的镜面高光的。这里就揭示出，只有钢铁才应该有一些镜面高光的。所以我们需要让物体的某些部分以不同的强度显示镜面高光，这个问题看上去和漫反射贴图特别相似；   
+我们同样可以使用一个专门用于镜面高光的纹理贴图。这也就意味着我们需要生成一个黑白的（如果你想得话也可以是彩色的）纹理，来定义物体每部分的镜面光强度。   
+镜面高光的强度可以通过图像的每个像素来进行获取，镜面光贴图上的每个像素都可以由一个颜色向量来代替，例如黑色代表颜色向量vec3(0,0),灰色代表颜色向量vec3(0.5)。在片段着色器中，我们接下来取样对应的颜色值，并且将它乘以光源的镜面强度。一个像素越“白”，那么乘积会越大，物体的镜面分量就会越大。   
+由于箱子大部分由木头组成，木头材质本身没有镜面高光，所以漫反射纹理的木头部分都被换成了黑色。而箱子钢制边框镜面强度是有细微变化的，钢铁本身比较容易受到镜面高光的影响，而裂缝不会。   
+使用Photoshop和Gimp之类的工具将漫反射纹理转换为镜面光纹理还是比较容易的，只需要做一些剪除操作，再转个黑白，加个对比度。    
+#### 采样镜面光贴图   
+镜面光贴图和其它的纹理非常类似，所以代码也和漫反射贴图的代码很类似。记得要保证正确地加载图像并生成一个纹理对象。由于我们正在同一个片段着色器中使用另一个纹理采样器，我们必须要对镜面光贴图使用一个不同的纹理单元（见纹理），所以我们在渲染之前先把它绑定到合适的纹理单元上：   
+```
+lightingShader.setInt("material.specular", 1);
+...
+glActiveTexture(GL_TEXTURE1);
+glBindTexture(GL_TEXTURE_2D, specularMap);
+```
+接下来更新片段着色器的材质属性，让其接受一个sampler2D而不是vec3作为镜面光分量：   
+```
+struct Material {
+    sampler2D diffuse;
+    sampler2D specular;
+    float     shininess;
+};
+```
+最后我们希望采样镜面光贴图，来获取片段所对应的镜面光强度：   
+```
+vec3 ambient  = light.ambient  * vec3(texture(material.diffuse, TexCoords));
+vec3 diffuse  = light.diffuse  * diff * vec3(texture(material.diffuse, TexCoords));  
+vec3 specular = light.specular * spec * vec3(texture(material.specular, TexCoords));
+FragColor = vec4(ambient + diffuse + specular, 1.0);
+```   
+通过使用镜面光贴图我们可以对物体设置大量的细节，尤其例如物体哪些部分需要有闪闪发光的属性。我们甚至可以设置它们对应的强度。   
+> 镜面光为什么没有使用实际的颜色？是因为实际当中镜面光颜色往往是由光源本身来决定大部分（甚至是全部）的，并不能生成真实的视觉效果（这就是为什么镜面光贴图通常都是白色，因为我们只关心强度）；   
+通过使用漫反射和镜面光贴图，我们可以给相对简单的物体添加大量的细节。我们甚至可以使用法线/凹凸贴图(Normal/Bump Map)或者反射贴图(Reflection Map)给物体添加更多的细节，但这些将会留到之后的教程中。   
+
+## 投光物    
+
+
+
+
 
