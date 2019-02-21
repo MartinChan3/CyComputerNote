@@ -1043,7 +1043,11 @@ struct Light {
 ```
 float distance = length(light.position - FragPos);
 float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));
-```
+```   
+![衰减之后的光线的情况](https://learnopengl-cn.github.io/img/02/05/light_casters_point_light.png)   
+
+### 聚光   
+最后一种需要进行讨论的光的类型是聚光(SpotLight)。聚光是位于环境中某个位置的光源，它只朝着一个特定的方向而不是所有方向照射光线。这样带来的结果就是只在聚光方向的特定半径内物体才会被照亮。
 
 
 
