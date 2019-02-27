@@ -1047,10 +1047,209 @@ float attenuation = 1.0 / (light.constant + light.linear * distance + light.quad
 ![衰减之后的光线的情况](https://learnopengl-cn.github.io/img/02/05/light_casters_point_light.png)   
 
 ### 聚光   
-最后一种需要进行讨论的光的类型是聚光(SpotLight)。聚光是位于环境中某个位置的光源，它只朝着一个特定的方向而不是所有方向照射光线。这样带来的结果就是只在聚光方向的特定半径内物体才会被照亮。
+最后一种需要进行讨论的光的类型是聚光(SpotLight)。聚光是位于环境中某个位置的光源，它只朝着一个特定的方向而不是所有方向照射光线。这样带来的结果就是只在聚光方向的特定半径内物体才会被照亮。最简单的例子就是路灯或者手电筒。   
+OpenGL中的聚光是用一个世界空间坐标位置、一个方向和一个切光角(CutOff Angle)表示，切光角指明了聚光半径（圆锥半径）。对于每个片段，我们会计算是否位于聚光的切光方向之间（就是是否在锥形内），如果是的话，就照亮对应的片段。   
+![聚光效果](https://learnopengl-cn.github.io/img/02/05/light_casters_spotlight_angles.png)   
+- LightDir: 从片段指向光源的向量；
+- SpotLight： 聚光所指向的方向；
+- Phiφ：指定聚光半径的切光角。落在该角度之外的物体都不会被这个聚光灯所照亮。   
+- Thetaθ：LightDir和SpotDir之间的向量，若在聚光内部，则θ应该比φ小。    
+### 手电筒   
+手电筒(Flashlight)是一个位于观察者位置的聚光，通常它都会瞄准玩家视角的正前方。基本上说，手电筒就是普通的聚光，但是它的位置和方向会随着玩家的位置和朝向不断地更新。   
+所以我们需要在片段着色器中有聚光的位置向量（来计算光的方向向量）、聚光的方向向量和一个切光角，我们可以保存到Light结构体中：   
+```
+struct Light {
+    vec3  position;
+    vec3  direction;
+    float cutOff;
+    ...
+};
+```   
+接着将合适的值传递到着色器中：   
+```
+lightingShader.setVec3("light.position",  camera.Position);
+lightingShader.setVec3("light.direction", camera.Front);
+lightingShader.setFloat("light.cutOff",   glm::cos(glm::radians(12.5f)));
+```   
+可以看到，我们并没有传递切角值，而是传递了切角的一个余弦值。这样做的原因是我们在片段着色器中会计算LightDir和SpotDir向量的点积，这个点积返回的将是一个余弦值而不是角度值，所以我们不能直接使用角度值和余弦值进行比较。为了避免计算反余弦值，我们传入这个角的余弦值。   
+接下来计算θ值，并和切光角φ对比，来决定是否在聚光灯内部：   
+```
+float theta = dot(lightDir, normalize(-light.direction));   
+if (theta > light.cutOff)
+{
+	//执行光照计算
+}
+else
+	color = vec4(light.ambient * vec3(texture(material.diffuse, TexCoor)), 1.0);
+```
+我们首先计算了lightDir和取反的direction向量（取反是因为我们想让向量指向光源而不是从光源出发），切记对所有相关的向量标准化。   
+最终获得的图像如下：   
+![非平滑聚光效果](https://learnopengl-cn.github.io/img/02/05/light_casters_spotlight_hard.png)    
+### 平滑/软化边缘    
+为了创建一种看起来边缘平滑的聚光，我们需要模拟聚光有一个内圆锥(Inner Cone)和外圆锥(Outer Coner)。我们可以将内圆锥设置为上一部分中那个圆锥，同时我们也需要一个圆锥，让光从内圆锥逐渐减暗，直到外圆锥的边界。   
+为了创建一个外圆锥，我们需要再定义一个余弦值来定义聚光方向向量和外圆锥向量（等于它半径）的夹角，如果一个片段处于内外圆锥之间，就会给出一个0.0到1.0之间的强度值。如果片段在内圆锥之内，它的强度就是1.0，如果在外圆锥之外强度值就是0.0。   
+我们可以利用以下公式计算这个值。   
+$$
+\begin{equation} I = \frac{\theta - \gamma}{\epsilon} \end{equation}
+$$
+这里ϵ是内锥(θ)和外锥(γ)之间的余弦值差，最终值I就是当前片段聚光的强度。   
+我们提供了一些实例，见下表：   
+\(\theta\)|\(\theta\)（角度）|\(\phi\)（内光切）|\(\phi\)（角度）|\(\gamma\)（外光切）|\(\gamma\)（角度）|\(\epsilon\)|\(I\)
+--|---|---|---|---|---|---|---
+0.87|30|0.91|25|0.82|35|0.91 - 0.82 = 0.09|0.87 - 0.82 / 0.09 = 0.56
+0.9|26|0.91|25|0.82|35|0.91 - 0.82 = 0.09|0.9 - 0.82 / 0.09 = 0.89
+0.97|14|0.91|25|0.82|35|0.91 - 0.82 = 0.09|0.97 - 0.82 / 0.09 = 1.67
+0.83|34|0.91|25|0.82|35|0.91 - 0.82 = 0.09|0.83 - 0.82 / 0.09 = 0.11
+0.64|50|0.91|25|0.82|35|0.91 - 0.82 = 0.09|0.64 - 0.82 / 0.09 = -2.0
+0.966|15|0.9978|12.5|0.953|17.5|0.966 - 0.953 = 0.0448|0.966 - 0.953 / 0.0448 = 0.29   
+基本上是在内外余弦之间根据θ插值。   
+现在可以直接摒弃之前的if/else判断，能够使用正确的内容进行计算。   
+```
+float theta     = dot(lightDir, normalize(-light.direction));
+float epsilon   = light.cutOff - light.outerCutOff;
+float intensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);    
+...
+// 将不对环境光做出影响，让它总是能有一点光
+diffuse  *= intensity;
+specular *= intensity;
+...
+```
+注意，我们使用了clamp函数，让第一个参数被限制到了0.0和1.0之间。   
+最终获得的箱子如下：   
+![边缘平滑的箱子图像](https://learnopengl-cn.github.io/img/02/05/light_casters_spotlight.png)
 
+## 多光源    
+本章，我们结合之前所有的知识，创造一个包含六个光源的场景，其中包含一个类似太阳的定向光（Direction Light），四个分布在场景中的点光源(Point Light)以及一个手电筒(Flashlight)。   
+因为使用了多个光源，这里我们引出GLSL的函数概念。这么做的原因在于，每一种光源的计算都需要一种不同的计算方法，而我们对多个光源进行光照计算时，代码很快变得非常复杂。如果我们只在main函数中进行这些计算，代码就会变得难以理解。   
+GLSL中函数类似C中的函数，包含一个函数名、一个返回值类型，如果函数不是在main函数之前生成，我们还需要在代码文件顶部声明一个原型，我们将会对三种光源每个类型都创造一个不同的函数。    
+当我们在场景中使用多个光源时，我们通常使用以下方法： 我们需要有一个单独颜色向量代表片段的输出颜色。对于每一个光源，它对于片段的贡献颜色将会加到片段最终的输出颜色向量上。所以场景中的每个光源都会计算它们各自对片段的影响，并且最终结合为一个最终的输出颜色。大体的结构会类似于：   
+```
+out vec4 FragColor;
+void main()
+{
+	//定义一个输出颜色
+	vec3 output;   
+	
+	//将定向光的贡献添加到输出中
+	output += someFunctionToCalculateDirectionalLight();
+	
+	//对所有点光源也做相同的事   
+	for (int i = 0; i < nr_of_point_lights; i++)
+		output += someFunctionToCalculatePointLight();
+		
+	//也加上其它的光源（例如聚光）   
+	output += someFunctionToCalculateSpotLight();
+	
+	FragColor = vec4(output, 1.0);
+}
 
+```
 
+### 定向光    
+我们需要在片段着色器中定义一个函数来计算定向光对相应片段的贡献：它会接受一些参数并且计算一个定向光照的颜色。   
+首先，我们需要定义一个定向光源定义所需要的最少变量，可以将其存在一个叫做DirLight的结构体中，并定义为一个uniform。   
+```
+struct DirLight {
+    vec3 direction;
 
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+};  
+uniform DirLight dirLight;
+```
+结合之前的知识，我们可以很容易的创造出新的计算平行光源的GLSL函数：   
+```
+vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir)
+{
+    vec3 lightDir = normalize(-light.direction);
+    // 漫反射着色
+    float diff = max(dot(normal, lightDir), 0.0);
+    // 镜面光着色
+    vec3 reflectDir = reflect(-lightDir, normal);
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+    // 合并结果
+    vec3 ambient  = light.ambient  * vec3(texture(material.diffuse, TexCoords));
+    vec3 diffuse  = light.diffuse  * diff * vec3(texture(material.diffuse, TexCoords));
+    vec3 specular = light.specular * spec * vec3(texture(material.specular, TexCoords));
+    return (ambient + diffuse + specular);
+}
+```   
+
+### 点光源   
+类似上文，我们可以定义一个用于计算点光源的结构体：   
+```
+struct PointLight {
+    vec3 position;
+
+    float constant;
+    float linear;
+    float quadratic;
+
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+};  
+#define NR_POINT_LIGHTS 4
+uniform PointLight pointLights[NR_POINT_LIGHTS];
+```   
+我们甚至类似C语言使用了预定义宏和数组，接下来我们很自然的还可以得到点光源的函数模型：   
+```
+vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
+{
+    vec3 lightDir = normalize(light.position - fragPos);
+    // 漫反射着色
+    float diff = max(dot(normal, lightDir), 0.0);
+    // 镜面光着色
+    vec3 reflectDir = reflect(-lightDir, normal);
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+    // 衰减
+    float distance    = length(light.position - fragPos);
+    float attenuation = 1.0 / (light.constant + light.linear * distance + 
+                 light.quadratic * (distance * distance));    
+    // 合并结果
+    vec3 ambient  = light.ambient  * vec3(texture(material.diffuse, TexCoords));
+    vec3 diffuse  = light.diffuse  * diff * vec3(texture(material.diffuse, TexCoords));
+    vec3 specular = light.specular * spec * vec3(texture(material.specular, TexCoords));
+    ambient  *= attenuation;
+    diffuse  *= attenuation;
+    specular *= attenuation;
+    return (ambient + diffuse + specular);
+}
+```   
+
+### 合并结果   
+合并到main函数中的结果如下所示：  
+```
+void main()
+{
+    // 属性
+    vec3 norm = normalize(Normal);
+    vec3 viewDir = normalize(viewPos - FragPos);
+
+    // 第一阶段：定向光照
+    vec3 result = CalcDirLight(dirLight, norm, viewDir);
+    // 第二阶段：点光源
+    for(int i = 0; i < NR_POINT_LIGHTS; i++)
+        result += CalcPointLight(pointLights[i], norm, FragPos, viewDir);    
+    // 第三阶段：聚光
+    //result += CalcSpotLight(spotLight, norm, FragPos, viewDir);    
+
+    FragColor = vec4(result, 1.0);
+}
+```
+唯一和之前有些区别的地方在于，我们现在点光源是一个数组，这样我们在访问uniform变量时，需要添加对应的下标；   
+```
+lightingShader.setFloat("pointLights[0].constant", 1.0f);   
+```   
+同样的，点光源由于有4个，每个有7个属性，那么总共有28个uniform调用，不过这个是没有办法避免的（通过循环或许可以暂时解决）。同时我们还需要定义四个光源的位置向量；   
+```
+glm::vec3 pointLightPositions[] = {
+    glm::vec3( 0.7f,  0.2f,  2.0f),
+    glm::vec3( 2.3f, -3.3f, -4.0f),
+    glm::vec3(-4.0f,  2.0f, -12.0f),
+    glm::vec3( 0.0f,  0.0f, -3.0f)
+};
+```
 
 
