@@ -206,3 +206,21 @@ void main()
 
 53. C++中结构体有个很好的特性，它的内部存储结构是连续的，这意味着基本上可以直接将其传递给GLSL，并且方便offsetof函数的使用。   
 
+54. Qt当中可以使用类似下方的语句来锁定OpenGL的版本处理，类似GLFW中的版本控制：   
+```
+int main(int argc, char *argv[])
+{
+    QSurfaceFormat fmt;
+    fmt.setDepthBufferSize(24);
+    if (QOpenGLContext::openGLModuleType() == QOpenGLContext::LibGL) {
+        fmt.setVersion(3, 3);
+        fmt.setProfile(QSurfaceFormat::CompatibilityProfile);
+    } else {
+        fmt.setVersion(3, 0);
+    }
+    QSurfaceFormat::setDefaultFormat(fmt);
+    QGuiApplication app(argc, argv);
+    ...
+}
+```
+
