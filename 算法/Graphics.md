@@ -453,7 +453,7 @@ void SearchLineNewSeed(std::stack<Point> &stk, int xLeft, int xRight,
 	xt += (xspan == 0) ? 1 : xspan;
 }
 ```
-2) 扫描线算法（有序边表法）:适用于矢量图填充，不需要种子点，适合计算机自动图形处理的场合；[csdn](https://blog.csdn.net/orbit/article/details/7368996)      
+2) 扫描线算法（有序边表法）:适用于矢量图填充，不需要种子点，适合计算机自动图形处理的场合；[csdn](https://blog.csdn.net/orbit/article/details/7368996 )      
 
 基本思想：由水平扫描线从上到下(或者从下到上)扫描一个由多条首尾相连的线段构成的多边形，每根扫描线和多边形的边界产生一系列的交点，若将这些交点按照x坐标排序，然后将排序后的点两两成对，作为线段的两个交点，以所填的颜色绘制水平线；多边形被扫描完毕后，整个多边形的填充也就完成了。   
 > 步骤：  
@@ -487,10 +487,124 @@ typedef struct tagEDGE
 	int    ymax;
 }EDGE;
 ```
-[csdn](https://blog.csdn.net/orbit/article/details/7368996)
-![活动边表示意图](https://img-my.csdn.net/uploads/201203/19/0_1332138897cTqT.gif)
+[csdn](https://blog.csdn.net/orbit/article/details/7368996 )
+![活动边表示意图](https://img-my.csdn.net/uploads/201203/19/0_1332138897cTqT.gif )
 扫描线（y=4）的活动边表：   
-![扫描线4的活动边表](https://img-my.csdn.net/uploads/201203/19/0_133213919970Pv.gif)   
-![扫描线7的活动边表](https://img-my.csdn.net/uploads/201203/19/0_1332139249Oi4K.gif)   
+![扫描线4的活动边表](https://img-my.csdn.net/uploads/201203/19/0_133213919970Pv.gif )   
+![扫描线7的活动边表](https://img-my.csdn.net/uploads/201203/19/0_1332139249Oi4K.gif )   
 前面提到过，扫描线算法的核心就是围绕“活动边表(AET)”展开的，为了方便活动边表的建立与更新，我们为每一条扫描线建立一个“新边表(NET)”，存放该扫描线第一次出现的边。当算法处理到某条扫描线时，就将这条扫描线的“新边表”中所有边逐一插入到“活动边表”中。新边表通常在算法开始的时候建立，建立新边表的规则就在于：**如果某条边的较低端点(y坐标较小的那个点)的y坐标与扫描线y相等，则该边就是扫描线y的新边，应该加入扫描线的新边表。**上图例子中的新边表如下图所示：   
-![]()
+![各扫描线的边表](https://img-my.csdn.net/uploads/201203/19/0_1332139383AV84.gif )   
+需要注意的还有以下事情：   
+1) 多边形顶点处理：依图而看，四种特殊情况，分别为上下左右顶点，其中**左右顶点可以通过引用单侧开闭区间方法避免，上下顶点视为顶点数为0（或者2）进行解决**。   
+      
+![多边形顶点情形](https://img-my.csdn.net/uploads/201203/19/0_1332139457bzNF.gif )   
+2) 水平边：通常直接画出，然后在后续处理中进行忽略该水平边，不进行对应求交计算；   
+3) 避免填充越界：为了防止绘制不准确或者越界，使用左闭右开原则进行绘制；    
+
+实现：   
+扫描线算法从AET开始，而AET依赖于NET，这里先定义新边表的数据结构，定义“新边表”的数据结构如下：
+```
+std::vector<std::list<EDGE>> slNet(ymax - ymin + 1);   
+```   
+其中ymax和ymin是多边形所有顶点中y坐标的最大值和最小值，用于界定扫描线的范围。slNet中的第一个元素是ymin所在的扫描线，以此类推，最后一个元素时ymax所在的扫描线。在开始对每条扫描线处理之前，需要计算出多边形的ymax和ymin并初始化“新边表”：   
+```
+void ScanLinePolygonFill(const Polygon& py, int color)
+{
+	assert(py.IsValid);
+	
+	int ymin = 0;
+	int ymax = 0;  
+	GetPolygonMinMax(py, ymin, ymax);
+	std::vector<std::list<EDGE>> slNext(ymax - ymin + 1);
+	InitScanLineNewEdgeTable(slNet, py, ymin, ymax);
+	HorizontalEdgeFill(py, color);//水平边直接画线填充   
+	ProcessScanLineFill(slNet, ymin, ymax, color);
+}
+```   
+InitScanLineNewEdgeTable()函数根据多边形的顶点和边的情况初始化新边表，实现过程中的左顶点和右顶点的区间修正原则：  
+``` 
+void InitScanLineNewEdgeTable(std::vector<std::list<EDGE>> &slNet, const Polygon &py, int ymin, int ymax)
+{
+	EDGE e;
+	for (int i = 0; i < py.GetPolyCount(); i++)
+	{
+		const Point& ps = py.pts[i];
+		const Point& pe = py.pts[(i + 1) % py.GetPolyCount()];
+		const Point& pss = py.pts[(i - 1 + py.GetPolyCount()) % py.GetPolyCount()];
+		const Point& pee = py.pts[(i + 2) % py.GetPolyCount()];//这个取各个点的写作方式值得参考   
+		
+		if (pe.y != ps.y) //不处理水平线
+		{
+			e.dx = double(pe.x - ps.x) / double(pe.y - ps.y);
+			if (pe.y > ps.y)
+			{
+				e.xi = ps.x;
+				if (pee.y >= pe.y)
+					e.ymax = pe.y - 1;
+				else
+					e.ymax = pe.y;
+				
+				slNet[ps.y - ymin].push_front(e);
+			}
+			else
+			{
+				e.xi = pe.x;
+				if (pss.y >= ps.y)
+					e.ymax = ps.y - 1;
+				else
+					e.ymax = ps.y;
+				slNet[pe.y - ymin].push_front(e);
+			}
+		}
+	}
+}
+```
+遍历所有边，根据前后两个顶点情况判断是否需要-1修正；ps、pe分别是当前处理边的起点和终点，pss是再之前一个点，pee是再之后一个点，这两个点主要用于判断ps和pe是否为左顶点还是右顶点；同时可以看到水平线是不经过任何处理的；    
+ProcessScanLineFill()函数开始对每条扫描线进行处理，对每条扫描线的处理有四个操作，分别被封装到4个函数中：   
+```
+void ProcessScanLineFill(){
+	std::list<EDGE> aet;
+	for (int y = ymin; y <= ymax; y++)
+	{
+		InsertNetListToAet(slNet[y - ymin], aet);
+		FillAetScanLine(aet, y, color);
+		//删除非活动边
+		RemoveNonActiveEdgeFromAet(aet, y);
+		//更新活动边表中每项的xi值，并根据xi重新排序   
+		UpdateAndResortAet(aet);
+	}
+}
+```   
+InsertNetListToAet()函数负责将扫描线所对应的新边插入到aet中，插入操作到保证aet还是有序表，应用了插入排序的思想，实现简单。FillAetScanLine()函数执行具体的填充动作，将aet中边交点成对取出组成填充区间，然后根据左闭右开原则对每个区间进行填充。RemoveNonActiveEdgeFromAet()函数负责对下一条扫描线来说已经不是活动边的边从aet中删除，删除条件即为当前扫描线y与边的ymax相等，如果有多条边满足这个条件，则一并删除；   
+```
+bool IsEdgeOutOfActive()
+{
+	return (e.ymax == y);
+}
+
+void RemoveNonActiveEdgeFromAet(std::list<EDGE> &aet, int y)
+{
+	aet.remove_if(std::bind2nd(std::ptr_fun()IsEdgeOutOfActive), y);
+}
+```   
+UpdateAndResortAet()函数更新边表中每项的xi值，就是根据扫描线的连贯性用dx对其进行修正，并且根据xi从小到大的原则对更新后的aet表进行重新排序：   
+```
+void UpdateAndResortAet(EDGE &e)
+{
+	e.xi += e.dx;
+}
+
+bool EdgeXiComparator(EDGE& e1, EDGE& e2)
+{
+	return e1.xi <= e2.xi;
+}
+
+void UpdateAndResortAet(std::list<EDGE>& aet)
+{
+	//更新xi
+	for_each(aet.begin(), aet.end(), UpdateAetEdgeInfo);
+	//根据xi从小到大重新排序
+	aet.sort(EdgeXiComparator);
+}
+```
+其实更新完xi后对aet表的重新排序也是可以避免的，只要在维护aet时，除了保证xi从小到大的排序外，在xi相同的情况下能够保证修正量dx也是从小到大有序，就可以避免每次对aet进行重新排序。算法实现也非常简单，只需要对InsertNetListToAet()函数稍作修改即可。   
