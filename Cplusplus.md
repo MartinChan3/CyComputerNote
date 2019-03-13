@@ -410,4 +410,15 @@ class Parent2{
 ![前加后加在模板库中的区别](https://img-blog.csdn.net/20151228000947030 )   
 
 67. 已知空间上有两点坐标，求第三点到这条直线的最短距离：   
-使用投影矩阵法，见[csdn](https://blog.csdn.net/wanhongluli/article/details/82992090 )
+使用投影矩阵法，见[csdn](https://blog.csdn.net/wanhongluli/article/details/82992090 )   
+
+68. 0312Interview:   
+1) 计算公共父节点（首先学会遍历寻找特定子结点遍历的办法，参见[博客园](http://www.cnblogs.com/neuzk/p/9486730.html )）
+>  考虑下对数性指表：a^loga(b)=b；
+2) 共线算法（共同矢量）
+3) Canvas绘制（几种变换如何进行）
+4) 多线程控制输出（互锁机制）
+5) 机器语言prase
+6) 路径优化
+
+69. 树的遍历：前序遍历、中序、后序三种遍历方式（已实现）

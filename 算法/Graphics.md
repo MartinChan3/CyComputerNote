@@ -608,3 +608,7 @@ void UpdateAndResortAet(std::list<EDGE>& aet)
 }
 ```
 其实更新完xi后对aet表的重新排序也是可以避免的，只要在维护aet时，除了保证xi从小到大的排序外，在xi相同的情况下能够保证修正量dx也是从小到大有序，就可以避免每次对aet进行重新排序。算法实现也非常简单，只需要对InsertNetListToAet()函数稍作修改即可。   
+最终给出例子：[FillPolygonWithAet](https://github.com/MartinChan3/CyComputerNote/blob/master/%E7%AE%97%E6%B3%95/FillPolygon.cpp )   
+
+问题：几何图形的布尔运算
+1. 求交：先求互相在对面里面的点，再求交点，所有这些点的合集
