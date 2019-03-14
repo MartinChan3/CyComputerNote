@@ -428,3 +428,87 @@ class Parent2{
 71. C++11中存在谓词系统（Predicate），用来在类似count_if函数中进行判断返回的条件。   
 
 72. C++11后有了标准的std::thread，其用法值得研究
+
+73. [仿函数](https://www.cnblogs.com/yyxt/p/4986981.html )
+：STL提供的各种算法往往有两个版本，其中一个版本表现出最直观的某种运算，另一个版本则会表现出最泛华的演算流程，允许用户通过“以template为参数来指定所要采取的策略”。这个类似于sort()函数，其中第一版本以operator<为排序依据，第二版本则允许任何操作。   
+如果要将某种“操作”当做算法的参数，唯一的办法就是将该“操作”（可能拥有数条指令）设计为一个函数，再将函数指针当做算法的一个参数；或是将该“操作”设计为一个所谓的仿函数(从语言层面上来说，是个class), 再以该仿函数产生一个对象，并以此对象作为算法的一个参数；   
+根据以上陈述，既然函数指针可以达到类似的效果，为何还需要有所谓的仿函数呢？原因在于**函数指针不能满足STL对抽象的要求，也不能满足软件积木的要求——函数指针无法和STL其他组件搭配，同时函数指针还不能保存信息**。   
+就实现观点而言，仿函数其实就是个“行为类似函数的对象”。为了做到这点，其类别定义必须自定义（或说改写或说重载）function call运算子(operator())。拥有这样的算子以后，我们就可以在仿函数的对象后面加上一对小括号，一次调用仿函数所定义的operator()。如下：   
+```
+#include <iostream>
+using namespace std;
+int main()
+{
+	greater<int> ig;
+	cout << boolalpha << ig(4,6); //boolalpha标志符，用于输出布尔变量
+	cout << greater<int>()(6,4);
+}
+```
+其中第一种用法比较为大家所熟悉，greater<int>ig是产生一个名为ig的对象，ig(4,6)则是调用其operator()，并且给予两个参数4,6。第二个用法是一个零时的对象，之后的6和4才是指定的参数。
+上述第二中语法一般不常见，但是在STL应用当中，却是主流用法。（STL仿函数绝大部分采用这种语法）   
+STL仿函数的分类，若以操作个数划分，可以分为一元仿函数，二元仿函数；若以功能划分，则可分为算数运算、关系运算、逻辑运算三大类。任何应用程序如果想要使用STL内建仿函数，需要引入<functional>头文件。   
+二、 可配接的关键   
+STL仿函数应该有能力被函数配接器修饰，彼此像积木一样被串接。为了拥有配接能力，每一个仿函数都必须定义自己相应的型别。，就像迭代器如果要融入整个STL大家庭，就必须依照定义定义自己的5个相应型别一样。这些相应的型别是为了让配接器能够取出，获得某些仿函数的某些信息(仿函数能保存信息，但是函数指针不行)。相应的型别都是一些typedef，所有必要的操作都在编译期都已经完成了，对程序的执行效率没有影响，不会带来任何的额外负担。   
+仿函数的相应型别主要用来表现函数参数型别和传回值型别。为了方便起见，functional定义了两个classes，分别用来代表一元仿函数和二元仿函数（STL不代表三元仿函数），其中没有任何data members或member functions，唯有一些型别定义。任何仿函数，只要依个人需求选择继承其中一个class，便自动拥有了对应的型别，也就拥有了配接能力。   
+1. unary_function:呈现一元函数的参数类别和返回值类型，定义简单：   
+```
+template <class Arg, class Result>
+struct unary_function{
+	typedef Arg arguement_type;
+	typedef Result result_type;
+};
+```   
+一旦某个仿函数继承了unary_function，其用户便可以渠道该仿函数的参数型别，并且以相同手法获得其返回值的型别；   
+```
+//以下仿函数继承了unary_function
+template<class T>
+struct negate: public uanry_function<T,T>
+{
+	T operator() (const T &x) const {return -x;}
+};
+
+
+// 以下配接器（adapter）用来表示某个仿函数的逻辑负值
+template <class Predicate>
+class unary_negate
+    ...
+public:
+    // 模板中,需要typename来指明后面的定义是一个类型
+    bool operator() (const typename Predicate::argument_type& x) const 
+    {
+        ....
+    }
+};
+```
+
+2. binary_function: 用来呈现二元函数的第一参数型别，第二参数型别以及返回值型别。定义简单：   
+```
+// STL规定，每一个Adaptable Binary Function 都应该继承此类别
+template <class Arg1, class Arg2, class Result>
+struct binary_function
+{
+    typedef Arg1 first_argument_type;
+    typedef Arg2 second_argument_type;
+    typedef Result result_type;
+};
+// 以下仿函数继承了binary_function
+template <class T>
+struct plus : public binary_function<T, T, T>
+{
+    T operator() (const T& x, const T& y) const { return x+y; };
+};
+
+// 以下配接器（adapter）用来将某个二元仿函数转化为一元仿函数
+template <class Operation>
+class binder1st
+    ....
+protected:
+    Operation op;
+    typename Operation::first_argument_type value;
+public:
+    // 注意，这里的返回值和参数，都需要加上typename，告诉编译器其为一个类型值
+    typename Operation::result_type operator() (const typename Operation::second_argument_type& x) const { ... }
+};
+```
+
+74. bind2nd [link](https://www.cnblogs.com/renyuan/p/6216375.html )
