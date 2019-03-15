@@ -512,3 +512,8 @@ public:
 ```
 
 74. bind2nd [link](https://www.cnblogs.com/renyuan/p/6216375.html )
+
+75. 首先需要明确，C++中的特定多线程操作是一套，Qt中操作是另一套，需要明确：
+- 进程与线程关系；   
+- 线程在stl中的概念和使用；
+- 对应在Qt当中的实现；
