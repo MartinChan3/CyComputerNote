@@ -2,6 +2,7 @@
 #include <vector>
 #include <iostream>
 #include <stack>
+#include <queue>
 
 //02: replace space
 void replaceSpace(char *str, int length){
@@ -122,12 +123,12 @@ public:
 
 void buildBinaryTree(TreeNode* node,
                      std::vector<int> &preOrderH,
-                     int ls, int le,
+                     int pres, int pree,
                      std::vector<int> &posOrderH,
-                     int rs, int re)
+                     int poss, int pose)
 {
     int treeVal = node->val;
-    int posInPosOrder(0);
+    int posInPosOrder(pres);
     for (auto i : posOrderH)
     {
         if (i == treeVal)
@@ -137,13 +138,19 @@ void buildBinaryTree(TreeNode* node,
         posInPosOrder++;
     }
 
-    le = posInPosOrder - 1;
-    rs = posInPosOrder + 1;
+    pree = posInPosOrder - 1;
+    poss = posInPosOrder + 1;
 
-    TreeNode *leftNode = new TreeNode(preOrderH[ls + 1]);
-    TreeNode *rightNode = new TreeNode(preOrderH[posInPosOrder + 1]);
-    buildBinaryTree(leftNode, preOrderH, ls, le, posOrderH, rs, re);
-    buildBinaryTree(rightNode, preOrderH, ls, le, posOrderH, rs, re);
+    if (posInPosOrder > pres)
+    {
+        TreeNode *leftNode = new TreeNode(preOrderH[pres + 1]);
+        buildBinaryTree(leftNode, preOrderH, pres + 1, pres + posInPosOrder, posOrderH, pree + 1 - posInPosOrder, pree - 1);
+    }
+    if (posInPosOrder < pree)
+    {
+        TreeNode *rightNode = new TreeNode(preOrderH[posInPosOrder + 1]);
+        buildBinaryTree(rightNode, preOrderH, pres, pree, posOrderH, poss, pose);
+    }
 }
 
 TreeNode *reBuildBinaryTree(std::vector<int> &preOrderH,
@@ -154,6 +161,199 @@ TreeNode *reBuildBinaryTree(std::vector<int> &preOrderH,
                     posOrderH, 0, posOrderH.size());
 
     return root;
+}
+
+//09 Number of 1 in num
+int numberOf1(int n)
+{
+    int num(0);
+    while (n)
+    {
+        if (n & 0x1)
+            num++;
+        n >>= 1;
+    }
+
+    return num;
+}
+
+//Return k mininst node in binary search tree
+//Core: the binary search tree's in-order traverse
+//is from min to max
+TreeNode *minNode(TreeNode* root, int &k)
+{
+    if (root)
+    {
+        TreeNode *node = minNode(root->left, k);
+        if (node != nullptr)
+            return node;
+        k--;
+        if (k == 0)
+            return root;
+        node = minNode(root->right, k);
+        if (node != nullptr)
+            return node;
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
+//Binary num has scequence of 0 num
+//Study binary data to 1
+int seqOf0(int n)
+{
+    int maxCount(0); int cur0Count(0);
+    while (n != 0)
+    {
+        if (!(n & 0x1)) //This is the only way to judge whether has option
+        {
+            cur0Count++;
+        }
+        else
+        {
+            if (cur0Count > maxCount)
+            {
+                maxCount = cur0Count;
+            }
+            cur0Count = 0;
+        }
+
+        n >>= 1;
+    }
+
+    return maxCount;
+}
+
+//Find the depth of binary tree
+void depth(TreeNode* root, int &curDepth)
+{
+    if (!root)
+        return;
+
+    curDepth++;
+
+    int tDepthL(0), tDepthR(0);
+    if (root->left)
+    {
+        depth(root->left, tDepthL);
+    }
+    if (root->right)
+    {
+        depth(root->right, tDepthR);
+    }
+
+    int maxDepth = tDepthL > tDepthR ? tDepthL : tDepthR ;
+    curDepth += maxDepth;
+}
+
+//Calculate 1 to n sum(Recrusive)
+int sum(int n)
+{
+    if (n == 0)
+        return 0;
+    return n + sum(n - 1);
+}
+
+//Calculate 1 to n sum(No if)
+int sum2(int n)
+{
+    int result = 0;
+    int tmp = 0;
+    bool flag = (n > 0) && tmp == (result = sum2(n - 1));
+    result += n;
+    return result;
+}
+
+//Print binary tree from top to bottom
+void pushToQueue(TreeNode* node, std::queue<TreeNode*> &q)
+{
+    if (!node)
+        return;
+    q.push(node);
+    if (node->left)
+        pushToQueue(node->left,q);
+    if (node->right)
+        pushToQueue(node->right,q);
+}
+
+void printFromTopToBottom(TreeNode* head)
+{
+    if (!head)
+        return;
+
+    std::queue<TreeNode*> q, qf;
+    q.push(head);
+    while (!q.empty()) //Core: Level order traverse
+    {
+        TreeNode* f = q.front();
+        q.pop();
+        if (f->left)
+            q.push(f->left);
+        if (f->right)
+            q.push(f->right);
+        qf.push(f);
+    }
+
+    while (!qf.empty())
+    {
+        std::cout << " " << (qf.front())->val;
+        qf.pop();
+    }
+}
+
+//Print binary tree to multi lines like level-order
+void printFromTopToBottomInMultiLines(TreeNode* head)
+{
+    if (!head)
+        return;
+
+    std::queue<TreeNode*> q;
+    q.push(head);
+
+    std::vector<std::vector<TreeNode*>> vec2D_Nodes;
+    std::vector<TreeNode*> vec_Nodes;
+
+    //Core: use now level flag to show if one layer has ouputed
+    int now_level = 1;
+    int next_level = 0;
+
+    while (!q.empty())
+    {
+        TreeNode* f = q.front();
+        vec_Nodes.push_back(f);
+        q.pop();
+
+        if (f->left)
+        {
+            q.push(f->left);
+            ++next_level;
+        }
+        if (f->right)
+        {
+            q.push(f->right);
+            ++next_level;
+        }
+        --now_level;
+
+        if (now_level == 0)
+        {
+            now_level = next_level;
+            next_level = 0;
+            vec2D_Nodes.push_back(vec_Nodes);
+            vec_Nodes.clear();
+        }
+    }
+
+    for (auto it1 : vec2D_Nodes)
+    {
+        for (auto it2 : it1)
+        {
+            std::cout << it2->val << " ";
+        }
+        std::cout << std::endl;
+    }
 }
 
 void main()
@@ -174,6 +374,40 @@ void main()
     std::vector<int> preOrderIntArr = {1,2,4,7,3,5,6,8};
     std::vector<int> inOrderIntArr = {4,7,2,1,5,3,8,6};
     reBuildBinaryTree(preOrderIntArr, inOrderIntArr);
+
+    //09
+    std::cout << std::endl << "09 Number of 100 is ";
+    std::cout << numberOf1(100);
+
+    //find Kth binary node
+    TreeNode b1(1), b2(2), b3(3), b5(5), b6(6), b7(7), b8(8), b9(9);
+    b2.left = &b1; b2.right = &b3;
+    b7.left = &b6; b7.right = &b8;
+    b5.left = &b2; b5.right = &b7;
+    int k1 = 3, k2 = 6;
+    std::cout << std::endl << "Kth is ";
+    std::cout << minNode(&b5, int(k2))->val;
+
+    //Return 0 max sequenced num
+    std::cout << seqOf0(0x44);
+
+    //Return depth of binary tree
+    b8.right = &b9;
+    int depthT = 0;
+    depth(&b5, depthT);
+    std::cout << std::endl << "Depth of tree is "<< depthT;
+
+    //calculate sum
+    std::cout << std::endl << "Recursive sum is " << sum(3);
+    std::cout << std::endl << "Recursive sum is " << sum2(3);
+
+    //print from top
+    std::cout << std::endl;
+    printFromTopToBottom(&b5);
+
+    //print above in multi lines
+    std::cout << std::endl;
+    printFromTopToBottomInMultiLines(&b5);
 
     return;
 }
