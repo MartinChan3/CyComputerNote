@@ -3,7 +3,8 @@
 #include <iostream>
 #include <stack>
 #include <queue>
-
+#include <functional>
+#include <vld.h>
 //02: replace space
 void replaceSpace(char *str, int length){
     int spaceCount = 0;
@@ -124,12 +125,12 @@ public:
 void buildBinaryTree(TreeNode* node,
                      std::vector<int> &preOrderH,
                      int pres, int pree,
-                     std::vector<int> &posOrderH,
+                     std::vector<int> &inOrderH,
                      int poss, int pose)
 {
     int treeVal = node->val;
     int posInPosOrder(pres);
-    for (auto i : posOrderH)
+    for (auto i : inOrderH)
     {
         if (i == treeVal)
         {
@@ -138,27 +139,28 @@ void buildBinaryTree(TreeNode* node,
         posInPosOrder++;
     }
 
-    pree = posInPosOrder - 1;
-    poss = posInPosOrder + 1;
-
     if (posInPosOrder > pres)
     {
         TreeNode *leftNode = new TreeNode(preOrderH[pres + 1]);
-        buildBinaryTree(leftNode, preOrderH, pres + 1, pres + posInPosOrder, posOrderH, pree + 1 - posInPosOrder, pree - 1);
+        buildBinaryTree(leftNode,
+                        preOrderH, pres + 1, posInPosOrder - 1,
+                        inOrderH, poss + 1, poss + posInPosOrder - 1);
     }
     if (posInPosOrder < pree)
     {
-        TreeNode *rightNode = new TreeNode(preOrderH[posInPosOrder + 1]);
-        buildBinaryTree(rightNode, preOrderH, pres, pree, posOrderH, poss, pose);
+        TreeNode *rightNode = new TreeNode(preOrderH[pres + 1 + posInPosOrder]);
+        buildBinaryTree(rightNode,
+                        preOrderH, pres + posInPosOrder + 1, pree,
+                        inOrderH, poss, pose);
     }
 }
 
 TreeNode *reBuildBinaryTree(std::vector<int> &preOrderH,
-                            std::vector<int> &posOrderH )
+                            std::vector<int> &inOrderH )
 {
     TreeNode *root = new TreeNode(preOrderH[0]);
     buildBinaryTree(root, preOrderH, 0, preOrderH.size(),
-                    posOrderH, 0, posOrderH.size());
+                    inOrderH, 0, inOrderH.size());
 
     return root;
 }
@@ -356,6 +358,159 @@ void printFromTopToBottomInMultiLines(TreeNode* head)
     }
 }
 
+//Print binary tree in left-right crossed seq
+void printFromTopToBottomInMultiLinesCrossed(TreeNode* head)
+{
+    if (!head)
+        return;
+
+    std::queue<TreeNode*> q;
+    q.push(head);
+
+    std::vector<std::vector<TreeNode*>> vec2D_Nodes;
+    std::vector<TreeNode*> vec_Nodes;
+
+    int now_level = 1;
+    int next_level = 0;
+    while (!q.empty())
+    {
+        TreeNode* f = q.front();
+        if (!(vec2D_Nodes.size() % 2))
+            vec_Nodes.push_back(f);
+        else
+            vec_Nodes.insert(vec_Nodes.begin(), f);
+        q.pop();
+
+        if (f->left)
+        {
+            q.push(f->left);
+            ++next_level;
+        }
+        if (f->right)
+        {
+            q.push(f->right);
+            ++next_level;
+        }
+        --now_level;
+
+        if (now_level == 0)
+        {
+            now_level = next_level;
+            next_level = 0;
+            vec2D_Nodes.push_back(vec_Nodes);
+            vec_Nodes.clear();
+        }
+
+    }
+
+    for (auto it1 : vec2D_Nodes)
+    {
+        for (auto it2 : it1)
+        {
+            std::cout << it2->val << " ";
+        }
+        std::cout << std::endl;
+    }
+}
+
+//Print median in data flow
+//Use a max heap and a min heap, (Hmax's max
+// is less than Hmin's min).
+void Insert(int num,
+            std::vector<int> &minHeap,
+            std::vector<int> &maxHeap)
+{
+    int data = (minHeap.size() + maxHeap.size()) & 0x1;
+    if (data == 0)
+    {
+        //Even size of previous heaps
+        if (!maxHeap.empty() && num <= maxHeap[0])
+        {
+            maxHeap.push_back(num);
+            std::push_heap(maxHeap.begin(), maxHeap.end(), std::less<int>());
+
+            std::pop_heap(maxHeap.begin(), maxHeap.end(), std::less<int>());
+            num = *(maxHeap.end() - 1);
+            maxHeap.pop_back();
+        }
+
+        minHeap.push_back(num);
+        std::push_heap(minHeap.begin(), minHeap.end(), std::greater<int>());
+    }
+    else
+    {
+        //Odd size of previous heaps
+        if (!minHeap.empty() && num > minHeap[0])
+        {
+            minHeap.push_back(num);
+            std::push_heap(minHeap.begin(), minHeap.end(), std::greater<int>());
+
+            std::pop_heap(minHeap.begin(), minHeap.end(), std::greater<int>());
+            num = *(minHeap.end() - 1);
+            minHeap.pop_back();
+        }
+
+        maxHeap.push_back(num);
+        std::push_heap(maxHeap.begin(), maxHeap.end(), std::less<int>());
+    }
+}
+
+double GetMedian(int num,
+                 std::vector<int> &minHeap,
+                 std::vector<int> &maxHeap)
+{
+    Insert(num, minHeap, maxHeap);
+    if (((minHeap.size() + maxHeap.size()) & 0x1)== 0)
+    {
+        if (maxHeap.size() == 0 || minHeap.size() == 0)
+            return 0;
+        else
+            return (maxHeap[0] + minHeap[0]) * 1.0 / 2.0;
+    }
+    else
+    {
+        return minHeap[0];
+    }
+}
+
+//Binary tree path sum is a fixed val
+void findSPath(TreeNode* node,
+               int expectedNum,
+               std::vector<TreeNode*> path,
+               std::vector<std::vector<TreeNode*>>& paths)
+{
+    if (node)
+    {
+        path.push_back(node);
+        expectedNum -= node->val;
+        if (0 == expectedNum)
+        {
+            paths.push_back(path);
+        }
+
+        if (node->left)
+            findSPath(node->left, expectedNum, path, paths);
+        if (node->right)
+            findSPath(node->right, expectedNum, path, paths);
+    }
+}
+
+std::vector<std::vector<TreeNode*>> findPaths(TreeNode *node, int expectedNum)
+{
+    std::vector<std::vector<TreeNode*>> paths;
+    std::vector<TreeNode*> sPath;
+
+    findSPath(node, expectedNum, sPath, paths);
+    return paths;
+}
+
+//Judege tree B is part of tree A
+bool partOf(TreeNode* ta, TreeNode* tb)
+{
+
+}
+
+
 void main()
 {
     //02
@@ -373,7 +528,7 @@ void main()
     //04
     std::vector<int> preOrderIntArr = {1,2,4,7,3,5,6,8};
     std::vector<int> inOrderIntArr = {4,7,2,1,5,3,8,6};
-    reBuildBinaryTree(preOrderIntArr, inOrderIntArr);
+    //reBuildBinaryTree(preOrderIntArr, inOrderIntArr);
 
     //09
     std::cout << std::endl << "09 Number of 100 is ";
@@ -408,6 +563,26 @@ void main()
     //print above in multi lines
     std::cout << std::endl;
     printFromTopToBottomInMultiLines(&b5);
+
+    //print above in a crossed way
+    std::cout << std::endl << "Crossed way" << std::endl;
+    printFromTopToBottomInMultiLinesCrossed(&b5);
+
+    //get median num
+    std::cout << std::endl;
+    std::vector<int> maxTree, minTree;
+    std::cout << GetMedian(2, maxTree, minTree) << std::endl;
+    std::cout << GetMedian(4, maxTree, minTree) << std::endl;
+    std::cout << GetMedian(6, maxTree, minTree) << std::endl;
+    std::cout << GetMedian(8, maxTree, minTree) << std::endl;
+
+    //find sum path
+    TreeNode tr1(1), tr2(2), tr3(3), tr4(1), tr5(4), tr6(3), tr7(4);
+    tr1.left = &tr2; tr1.right = &tr3;
+    tr2.left = &tr4; tr2.right = &tr5;
+    tr3.left = &tr6; tr3.right = &tr7;
+    std::vector<std::vector<TreeNode*>> sumPaths =
+            findPaths(&tr1, 7);
 
     return;
 }

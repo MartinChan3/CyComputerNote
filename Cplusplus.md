@@ -519,3 +519,85 @@ public:
 - 对应在Qt当中的实现；
 
 76. C/C++被设计为一门由右向左的设计语言，这意味着先从一行的最右侧开始考虑；
+
+77. C++的堆基础知识：
+堆(heap)首先不是一个容器，而是一种数据组织方式；堆是一种完全二叉树(叶节点只发生在最后一层，若倒数第二层都有左右子叶，那么算是满二叉树)。   
+堆的定义：该堆是一个完全二叉树，每个节点和其子结点位置相对。父节点总是大于或者等于子结点，这种情况被称为**大顶堆**，或者父节点总是小于或等于子结点，这种情况称为**小顶堆**。注意，给定父节点的子结点不一定按顺序排列。   
+#### 创建堆：   
+algorithm的头文件中包含了创建堆的函数，make_heap()可以对随机访问迭代器指定的一段元素重新排列，生成一个大顶堆，如果没有指定比较函数，则**默认使用<**运算符，如下例：
+```
+std::vector<double>numbers{2.5,10.0,3.5,6.5,8.0,12.0,1.5,6.0};
+std::make_heap(std::begin(numbers), std:rend(numbers));
+// Result: 12 10 3.5 6.5 8 2.5 1.5 6
+```   
+![保存在vector中的堆](http://c.biancheng.net/uploads/allimg/180913/2-1P913154502555.jpg)   
+stl本身还提供了priority_queue，但是本身的make_heap()可以有一些又是，例如可以访问堆中的任意元素、可以在提供任何随机访问迭代器的序列容器中创建堆（包含了普通数组、string对象等）  
+以下语句生成了一个小顶堆，这里使用了三参数的std::make_heap。    
+```
+std::vector<double> numbers {2.5, 10.0, 3.5, 6.5, 8.0, 12.0, 1.5, 6.0};
+std::make_heap(std::begin(numbers), std::end(numbers), std::greater<>()); 
+// Result: 1.5 6 2.5 6.5 8 12 3.5 10
+```   
+#### 堆操作：   
+堆不是容器，而是组织容器元素的一种特别方式。使用push_heap()创建堆的方式，使用它来插入新的元素(先插入元素，再push_heap)：   
+```
+std::vector<double> numbers {2.5, 10.0, 3.5, 6.5, 8.0, 12.0, 1.5, 6.0};
+std::make_heap(std::begin(numbers),std::end(numbers));
+// Result: 12 10 3.5 6.5 8 2.5 1.5 6
+numbers.push_back(11); // Result: 12 10 3.5 6.5 8 2.5 1.5 6 11
+std::push_heap(std::begin(numbers), std::end(numbers));
+// Result: 12 11 3. 5 10 8 2. 5 1. 5 6 6. 5
+```   
+自建的比较函数也是支持的，但是注意需要使用和push_heap()相同的比较函数：   
+```
+std::vector<double> numbers {2.5, 10.0, 3.5, 6.5, 8.0, 12.0, 1.5, 6.0};
+std::make_heap(std::begin(numbers), std::end(numbers),
+std::greater<>());//Result: 1.5 6 2.5 6.5 8 12 3.5 10 numbers. push—back(1. 2);
+//Result: 1.5 6 2.5 6.5 8 12 3.5 10 1.2
+std::push_heap(std::begin(numbers), std::end(numbers),std::greater<>());
+//Result: 1.2 1.5 2.5 6 8 12 3.5 10 6.5
+```
+
+删除最大元素和添加元素看上去过程类似，但是做的事情相反，先调用pop_heap()，再移除最大的元素：   
+```
+std::vector<double> numbers{2.5, 10.0, 3.5, 6.5, 8.0, 12.0, 1.5, 6.0};
+std::make_heap(std::begin(numbers),std::end(numbers));
+//Result:12 10 3.5 6.5 8 2.5 1.5 6
+std::pop_heap(std::begin(numbers),std::end(numbers));
+// Result:10 8 3.5 6.5 6 2.5 1.5 12
+numbers.pop_back();// Result:10 8 3.5 6.5 6 2.5 1.5
+```    
+pop_heap()将第一个元素移动到最后，并且保证剩余的元素仍然是一个堆。然后使用vector成员函数pop_back()移除最后一个元素。如果make_heap()中使用了比较函数，那么pop_heap()的第三个参数也要是该参数:   
+```
+std::vector<double> numbers {2.5, 10.0, 3.5, 6.5, 8.0, 12.0, 1.5, 6.0};
+std::make_heap(std::begin(numbers),std::end(numbers),std::greater<>());
+// Result: 1.5 6 2.5 6.5 8 12 3.5 10
+std::pop_heap(std::begin(numbers), std::end(numbers),std:: greater<>());
+// Result: 2.5 6 3.5 6.5 8 12 10 1.5
+numbers.pop_back();//Result: 2.5 6 3.5 6.5 8 12 10
+```
+为了防止意外的操作，SLT仍然提供了一个检查序列是否为堆的方法：   
+```
+if(std::is_heap(std::begin(numbers),std::end(numbers)))
+    std::cout << "Great! We still have a heap.\n";
+else
+    std::cout << "oh bother! We messed up the heap.\n";
+```
+甚至提供了is_heap_until函数来检查是为堆的区间；   
+最后一个stl提供的是堆排序sort_heap()(复杂度O(NlogN))，它要求元素段本身是堆，否则会崩溃；
+```
+std::vector<double> numbers {2.5, 10.0, 3.5, 6.5, 8.0, 12.0, 1.5, 6.0};
+std::make_heap(std::begin(numbers), std::end(numbers));
+//Result: 12 10 3.5 6.5 8 2.5 1.5 6
+std::sort_heap(std::begin(numbers), std::end(numbers));
+// Result: 1.5 2.5 3.5 6 6.5 8 10 12
+```
+[STL中sort是固定的快速排序吗？](https://blog.csdn.net/qq_35440678/article/details/80147601)
+虽然algorithm使用了sort，但是sort_heap()本身使用了堆排序，利用堆的局部有序性让排序变得更快；   
+
+78. 考虑下堆插入的时间复杂度的问题（？）
+
+
+1
+2   3
+1 4 3 4
