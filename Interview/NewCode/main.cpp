@@ -250,6 +250,19 @@ void depth(TreeNode* root, int &curDepth)
     curDepth += maxDepth;
 }
 
+int depth(TreeNode *root)
+{
+    if (!root)
+        return 0;
+
+    int dl(0), dr(0);
+    if (root->left)
+        dl = depth(root->left);
+    if (root->right)
+        dr = depth(root->right);
+    return dl > dr ? ++dl : ++dr;
+}
+
 //Calculate 1 to n sum(Recrusive)
 int sum(int n)
 {
@@ -504,22 +517,259 @@ std::vector<std::vector<TreeNode*>> findPaths(TreeNode *node, int expectedNum)
     return paths;
 }
 
-//Judege tree B is part of tree A
-bool partOf(TreeNode* ta, TreeNode* tb)
+//Judege tree B is same with tree A
+bool isEqual(TreeNode* ta, TreeNode* tb)
 {
+    if (!ta && !tb)
+        return true;
+    if (!ta || !tb)
+        return false;
 
+    if (ta->val == tb->val)
+        return (isEqual(ta->left, tb->left) && isEqual(ta->right, tb->right));
+    else
+        return false;
 }
 
+//Judege tree B is part of tree A
+bool isPart(TreeNode* ta, TreeNode* tb) //Same to equal func above
+{
+    if (!tb)
+        return true;
+    if (!ta)
+        return false;
+    if (ta->val != tb->val)
+        return false;
+    else
+        return isPart(ta->left, tb->left) &&
+                isPart(ta->right, tb->right);
+}
+
+bool isPartTree(TreeNode* ta, TreeNode* tb)
+{
+    if (!ta && !tb)
+        return true;
+    if (!ta || !tb)
+        return false;
+
+    bool findIt(false);
+    if (ta->val == tb->val)
+        findIt = isPart(ta, tb);
+    if (findIt)
+        return true;
+    else
+        return isPartTree(ta->left, tb) || isPartTree(ta->right, tb);
+}
+
+//Mirror the binary tree
+void mirror(TreeNode* node)
+{
+    if (node)
+    {
+        TreeNode* tt;
+        tt = node->left;
+        node->left = node->right;
+        node->right = tt;
+        if (node->left)
+            mirror(node->left);
+        if (node->right)
+            mirror(node->right);
+    }
+}
+
+//Judge if a list is the result of pos-order traverse of binary search tree
+//Core: pos-order has the regular : some-small→some-big→root
+bool isBinarySearchTree(std::vector<int> &grp, int start, int end)
+{
+    if (grp.size() == 0)
+        return true;
+    if ((end - start) == 0)
+        return true;
+
+    int rootVal = grp[end];
+    int firstMaxIndex = start;
+    while (firstMaxIndex < end && grp[firstMaxIndex] < rootVal)
+    {
+        firstMaxIndex++;
+    }
+
+    bool isBTree(true);
+    for (int i = firstMaxIndex; i < end; i++)
+    {
+        if (grp[firstMaxIndex] <= rootVal)
+            isBTree = false;
+    }
+
+    if (!isBTree)
+        return false;
+    else
+    {
+        if (firstMaxIndex - 1 == start)
+            isBTree = true;
+        else
+            isBTree = isBinarySearchTree(grp, start, firstMaxIndex - 1);
+        if (!isBTree)
+            return false;
+        if (firstMaxIndex == end - 1)
+            isBTree = true;
+        else
+            isBTree = isBinarySearchTree(grp, firstMaxIndex, end - 1);
+        if (!isBTree)
+            return false;
+    }
+}
+
+//Transfer a binary search tree to sorted list, and no new nodes
+// in the example
+void transferBinaryTreeToSortedList(TreeNode* root)
+{
+    if (root)
+    {
+        TreeNode* tl, *tr;
+        tl = root->left;
+        tr = root->right;
+
+        if (tl)
+        {
+            transferBinaryTreeToSortedList(tl);
+            while (tl->right)
+                tl = tl->right;
+            tl->right = root;
+        }
+
+        if (tr)
+        {
+            transferBinaryTreeToSortedList(tr);
+            while (tr->left)
+                tr = tr->left;
+            tr->left = root;
+        }
+    }
+}
+
+//Judege a b-tree is balanced
+//Balanced b-tree: a tree whose left and right depeth
+//diff within 1.
+int depthMax(TreeNode* head)
+{
+    return depth(head);
+}
+
+int depthMin(TreeNode* head)
+{
+    if (!head)
+        return 0;
+
+    int tl(0), tr(0);
+    if (head->left)
+        tl = depthMin(head->left);
+    if (head->right)
+        tr = depthMin(head->right);
+
+    return tl < tr ? ++tl : ++tr;
+}
+
+bool isBalanced(TreeNode* head)
+{
+    if (!head)
+        return true;
+
+    int dmax, dmin;
+    dmax = depthMax(head);
+    dmin = depthMin(head);
+    if ((dmax - dmin) > 1)
+        return false;
+    else
+    {
+        return isBalanced(head->left) &&
+                isBalanced(head->right);
+    }
+}
+
+//above optimized: No recrusive cal in
+//already calculated level by recording depth
+bool isBalanced2(TreeNode* head, int &depth)
+{
+     if (!head)
+     {
+         depth = 0;
+         return true;
+     }
+
+     //Pos-order traverse ,and record the current depth
+     int left, right;
+     if (isBalanced2(head->left, left) &&
+             isBalanced2(head->right, right))
+     {
+         if (abs(right - left) <= 1)
+         {
+             depth = left > right ? left + 1: right + 1;
+             return true;
+         }
+     }
+
+     return false;
+}
+
+//Has a b-tree and a node, find the next in-order traverse
+//node, and each node has a ptr to father.
+class PTreeNode {
+public:
+    int val;
+    PTreeNode *left;
+    PTreeNode *right;
+    PTreeNode *parent;
+    PTreeNode(int x,
+              PTreeNode *leftp = nullptr,
+              PTreeNode *rightp = nullptr,
+              PTreeNode *parentp = nullptr) :
+        val(x), left(leftp), right(rightp), parent(parentp){}
+};
+
+PTreeNode* findNextInOrderNode(PTreeNode* root, PTreeNode* n)
+{
+    if (n->right) //When root has right child
+    {
+        PTreeNode *tr = n->right;
+        while (tr->left)
+        {
+            tr = tr->left;
+        }
+        return tr;
+    }
+    else //don't have right child
+    {
+        if (n == n->parent->left) //and be root left
+        {
+            return root->parent;
+        }
+        else //and be root right
+        {
+            if (n->parent == root)
+                return nullptr;
+            n = n->parent->parent;
+            if (n == root && !(n->right))//0321 here
+                return nullptr;
+            while (!(n->right))
+            {
+                if (n == root)
+                    return nullptr; //It is the last in-order
+                n = n->parent;
+            }
+            return n->right;
+        }
+    }
+}
 
 void main()
 {
-    //02
+    //02 replace space
     char c[] = "Time flys quickly";
     std::cout << c << std::endl;
     replaceSpace2(&(c[0]), 1000);
     std::cout << c << std::endl;
 
-    //03
+    //03 print list reversed
     ListNode n1(1), n2(2), n3(3), n4(4);
     n3.next = &n4; n2.next = &n3; n1.next = &n2;
     printListFromTailToHead(&n1);
@@ -551,6 +801,7 @@ void main()
     int depthT = 0;
     depth(&b5, depthT);
     std::cout << std::endl << "Depth of tree is "<< depthT;
+    std::cout << std::endl << "Depth of tree is "<< depth(&b5);
 
     //calculate sum
     std::cout << std::endl << "Recursive sum is " << sum(3);
@@ -581,8 +832,32 @@ void main()
     tr1.left = &tr2; tr1.right = &tr3;
     tr2.left = &tr4; tr2.right = &tr5;
     tr3.left = &tr6; tr3.right = &tr7;
-    std::vector<std::vector<TreeNode*>> sumPaths =
-            findPaths(&tr1, 7);
+    std::vector<std::vector<TreeNode*>> sumPaths = findPaths(&tr1, 7);
+
+    //find if tree B is part of tree A
+    TreeNode tb1(3), tb2(3), tb3(2);
+    tb1.left = &tb2; tb1.right = &tb3;
+    std::cout << (isPartTree(&tr1, &tb1)) ? "true" : "false";
+
+    //mirror the binary tree
+    mirror(&tr1);
+    mirror(&tr1);
+
+    //test a grp of data is seq of pos-order tree
+    std::vector<int> posOrderGrp = {1, 3, 2, 6, 8, 7, 6};
+    std::cout << std::endl << isBinarySearchTree(posOrderGrp, 0, posOrderGrp.size() - 1);
+
+    //transfer bianry search tree to list
+    //transferBinaryTreeToSortedList(&b5);
+
+    //judge a b-tree is balanced or not
+    std::cout << std::endl << isBalanced(&b5);
+    int dl(0), dr(0);
+    std::cout << std::endl << isBalanced2(&b5, dl);
+
+    //Find next node in in-order traverse
+    PTreeNode pt1(1), pt2(2), pt3(3), pt4(4), pt5(5), pt6(6), pt7(7);
+
 
     return;
 }
