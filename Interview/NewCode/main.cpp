@@ -1,10 +1,16 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string>
 #include <vector>
 #include <iostream>
+#include <sstream>
 #include <stack>
 #include <queue>
 #include <functional>
 #include <vld.h>
+#include <hash_map>
+#include <set>
+
 //02: replace space
 void replaceSpace(char *str, int length){
     int spaceCount = 0;
@@ -121,6 +127,21 @@ public:
              TreeNode *rightp = nullptr) :
         val(x), left(leftp), right(rightp){}
 };
+
+
+void release(TreeNode* root)
+{
+    if (!root)
+        return;
+
+    if (root->left)
+        release(root->left);
+    if (root->right)
+        release(root->right);
+
+    delete root;
+    root = nullptr;
+}
 
 void buildBinaryTree(TreeNode* node,
                      std::vector<int> &preOrderH,
@@ -739,26 +760,468 @@ PTreeNode* findNextInOrderNode(PTreeNode* root, PTreeNode* n)
     }
     else //don't have right child
     {
-        if (n == n->parent->left) //and be root left
+        PTreeNode *parent = n->parent;
+        PTreeNode *pCur = n;
+        //Core: if pCur is his parent right child ,find until top
+        while (parent && pCur == parent->right)
         {
-            return root->parent;
+            pCur = parent;
+            parent = pCur->parent;
         }
-        else //and be root right
+
+        return parent; //two situation: 1. it is a left child;2. find root;
+    }
+}
+
+//Judge a binary tree whether symmetric
+bool isSame(TreeNode* ln, TreeNode* rn)
+{
+    if (!ln && !rn)
+        return true;
+
+    if ((!ln && rn) || (ln && !rn))
+        return false;
+
+    if (ln->val != rn->val)
+        return false;
+
+    bool fIsSame;
+    fIsSame = isSame(ln->left, rn->right);
+    if (!fIsSame)
+        return false;
+    fIsSame = isSame(ln->right, rn->left);
+    if (!fIsSame)
+        return false;
+    return true;
+}
+
+bool isSymmetric(TreeNode* root)
+{
+    if (!(root->left->val == root->right->val))
+        return false;
+
+    return isSame(root->left, root->right);
+}
+
+//Binary tree serialization and reserialization
+std::string to_string(int t)
+{
+    std::stringstream ss;
+    ss << t;
+    return ss.str();
+}
+
+void serializeHelper(TreeNode *node, std::string& s)
+{
+    if (node == NULL)
+    {
+        s.push_back('#');
+        s.push_back(',');
+        return;
+    }
+    s += to_string(node->val);
+    s.push_back(',');
+    serializeHelper(node->left, s);
+    serializeHelper(node->right, s);
+}
+char* Serialize(TreeNode *root)
+{
+    if (root == NULL)
+        return NULL;
+    std::string s = "";
+    serializeHelper(root, s);
+
+    char *ret = new char[s.length() + 1];
+    strcpy(ret, s.c_str());
+    return ret;
+}
+
+TreeNode *deserializeHelper(std::string &s)
+{
+    if (s.empty())
+        return NULL;
+    if (s[0] == '#')
+    {
+        s = s.substr(2);//trim from pos 2 to end
+        return NULL;
+    }
+    TreeNode *ret = new TreeNode(std::stoi(s));
+    s = s.substr(s.find_first_of(',') + 1);
+    ret->left = deserializeHelper(s);
+    ret->right = deserializeHelper(s);
+    return ret;
+}
+
+TreeNode* Deserialize(char *str)
+{
+    if (str == NULL)
+        return NULL;
+    std::string s(str);
+    return deserializeHelper(s);
+}
+
+//judge a string whether is a numeric val
+bool isNumeric(std::string str)
+{
+    int size = str.size();
+    if (!size)
+        return false;
+    int si = 0;
+    if (str[si] == '-' || str[si] == '+')
+        si++;
+    int rSi = si;
+    bool fFindE(false);
+    bool fFindP(false);
+    int  ePos;
+    for (; si < size; si++)
+    {
+        if (str[si] == '.')
         {
-            if (n->parent == root)
-                return nullptr;
-            n = n->parent->parent;
-            if (n == root && !(n->right))//0321 here
-                return nullptr;
-            while (!(n->right))
-            {
-                if (n == root)
-                    return nullptr; //It is the last in-order
-                n = n->parent;
-            }
-            return n->right;
+            if (fFindP)
+                return false;
+            fFindP = true;
+        }
+        else if (str[si] == 'E' || str[si] == 'e')
+        {
+            if (fFindE)
+                return false;
+            if (si == rSi || si == size - 1)
+                return false;
+            fFindE = true;
+            ePos = ++si;
+            break;
+        }
+        else if (!(str[si] >= '0' && str[si] <= '9'))
+        {
+            return false;
         }
     }
+
+    if (fFindE)
+    {
+        if (!(str[si] >= '0' && str[si] <= '9'))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+//Return the first no repetition character from a string
+char findStr(char* str)
+{
+   //Sacrifice some rom and record the first index and times
+   //Time costs O(n)
+   int len=strlen(str),count[26],index[26];
+   char result,curr;
+
+   for(int j=0;j<26;j++)
+   {
+       count[j]=0;
+       index[j]=0;
+   }
+
+   bool exist=false;
+
+   for(int i = len; i > 0; i--)
+   {
+       curr=str[i-1];
+       count[curr-'a']++;
+       index[curr-'a']=i-1;
+   }
+
+   int minIndex=len+1;
+   for(int i=0;i<26;i++)
+   {
+       if(count[i]==1)
+       {
+           if(index[i]<minIndex)
+           {
+               minIndex=index[i];
+           }
+       }
+   }
+
+   return str[minIndex];
+}
+
+//char findStrHashed(const char *str)
+//{
+//    //use hash table to mark it
+//    std::hash_map<int, int> hashMap;
+//    int size = strlen(str);
+
+//    for (int i = 0; i < size; i++)
+//    {
+//        int t = str[i];
+//        std::hash_map<int ,int>::const_iterator cit;
+//        cit = hashMap.find(t);
+//        if (cit == hashMap.cend())
+//            (hashMap[t])++;
+//        else
+//            hashMap.insert(t, 0);
+//    }
+
+//     char c = -1;
+//     for (auto it = hashMap.begin(); it != hashMap.end(); it++)
+//     {
+//         if (it->second == 1)
+//         {
+//             c = it->first;
+//             break;
+//         }
+//     }
+
+//     return c;
+//}
+
+//Reverse chars
+void reverse(char *str)
+{
+    int size = strlen(str);
+    if (size <= 1)
+        return;
+
+    char *l, *r;
+    l = str;
+    r = str + size - 1;
+    char t;
+    while (l < r)
+    {
+        t = *l;
+        *l = *r;
+        *r = t;
+        l++; r--;
+    }
+}
+
+void reverseWord(char *str, int s, int e)
+{
+    char *l = str + s;
+    char *r = str + e;
+    char t;
+    while (l < r)
+    {
+        t = *l;
+        *l = *r;
+        *r = t;
+        l++; r--;
+    }
+}
+
+void reverseWords(char *str)
+{
+    std::vector<int> spaceIndexs;
+    int size = strlen(str);
+
+    spaceIndexs.push_back(-1);
+    for (int i = 0; i < size; i++)
+    {
+        if (str[i] == ' ')
+            spaceIndexs.push_back(i);
+    }
+    spaceIndexs.push_back(size);
+
+    for (int i = 0; i < spaceIndexs.size() - 1; i++)
+    {
+        int s = spaceIndexs[i] + 1;
+        int e = spaceIndexs[i + 1] - 1;
+        if (e > s || e - s > 2)
+        {
+            reverseWord(str, s, e);
+        }
+    }
+}
+
+//Rotate left of str
+void rol(char * str)
+{
+    int size = strlen(str);
+    if (size <= 1)
+        return;
+
+    char t = *str;
+    for (int i = 0; i < size - 1; i++)
+    {
+        str[i] = str[i + 1];
+    }
+    str[size - 1] = t;
+}
+
+void rol(char * str, int count)
+{
+    int size = strlen(str);
+    int rMove = count % size;
+
+    for (int i = 0; i < rMove; i++)
+        rol(str);
+}
+
+//Transfer to int
+int toInt(std::string str)
+{
+    if (str.empty())
+        return 0;
+
+    bool fNegative(false);
+    int startIndex(0);
+
+    if (str[0] == '+')
+    {
+        startIndex++;
+    }
+    else if (str[0] == '-')
+    {
+        startIndex++;
+        fNegative = true;
+    }
+
+    std::stack<char> s;
+    for (int m = startIndex ; m < str.size(); m++)
+    {
+        char i = str[m];
+        if (i <= '9' && i >= '0')
+            s.push(i);
+        else
+            return 0;
+    }
+
+    int r(0);
+    int place = 0;
+    while (!s.empty())
+    {
+        int t = s.top();
+        s.pop();
+        r += int(t - '0') * round(pow(10, place));
+        place++;
+    }
+
+    return fNegative ? -r : r;
+}
+
+//String arrange
+//Simple way: move one of the character to top and recurse
+//But it can't solve the repetition problem
+void permute1(std::string prefix, std::string str)
+{
+    if (str.length() == 0)
+        std::cout << prefix << std::endl;
+    else
+    {
+        for (int i = 0; i < str.length(); i++)
+            permute1(prefix + str[i],
+                     str.substr(0, i) +
+                     str.substr(i + 1, str.length()));
+    }
+}
+
+void permute1(std::string s)
+{
+    permute1("", s);
+}
+
+//Exchange way: can avoid repetition
+void swap(char* x, char* y)
+{
+    char tmp;
+    tmp = *x;
+    *x = *y;
+    *y = tmp;
+}
+
+void permute(char *a, int i, int n)
+{
+    int j;
+    if (i == n)
+        printf("%s\n", a);
+    else
+    {
+        for (j = i; j <= n; j++)
+        {
+            if(a[i] == a[j] && j != i) //avoid repetition here
+                continue;
+            swap( (a+i), (a+j));
+            permute(a, i+1, n);
+            swap( (a+i), (a+j)); //backtrack
+        }
+    }
+}
+
+//find first repeated num(time O(nlogn))
+int firstRepeatedNum(int *intArr, int size)
+{
+    std::set<int> s;
+    for (int i = 0; i < size; i++)
+    {
+        if (s.end() != s.find(intArr[i]))
+        {
+            return intArr[i];
+        }
+        else
+            s.insert(intArr[i]);
+    }
+
+    return INT_MIN;
+}
+
+//no use group way(save space)
+void swap(int* x, int* y)
+{
+    int tmp;
+    tmp = *x;
+    *x = *y;
+    *y = tmp;
+}
+
+int firstRepeatedNum2(int *intArr, int size)
+{
+    for (int i = 0; i < size; i++ )
+    {
+        int m = intArr[i];
+        if (m != i)
+        {
+            if (intArr[m] == m) ///???here
+                return m;
+            else
+                swap(intArr + i, intArr + m);
+        }
+    }
+
+    return INT_MIN;
+}
+
+//Construct product arr : bi = a1 * .. * a(i - 1) * a(i + 1).. *a(n)
+//Core: to make the matrix and left-behind was an increasing arr and
+//same to right-above
+std::vector<int> genProduct(std::vector<int> &A)
+{
+    std::vector<int> B;
+    if(A.empty())
+        return B;
+
+    int length = A.size();
+    B.push_back(1);
+    for(int i = 1; i < length;i++)
+    {
+        B.push_back(A[i-1] * B[i-1]);
+    }
+
+    int tmp = 1;
+    for(int i = length - 2; i >= 0; i--)
+    {
+        tmp *= A[i+1];
+        B[i] *= tmp;
+    }
+
+    return B;
+}
+
+//Find two numbers only show once in group
+void findOnceShowed(std::vector<int> &grp, int &a, int &b)
+{
+    //0325 here
+
 }
 
 void main()
@@ -857,7 +1320,76 @@ void main()
 
     //Find next node in in-order traverse
     PTreeNode pt1(1), pt2(2), pt3(3), pt4(4), pt5(5), pt6(6), pt7(7);
+    pt1.left = &pt2; pt1.right = &pt3;
+    pt2.parent = &pt1; pt3.parent = &pt1;
+    pt2.left = &pt4; pt2.right = &pt5;
+    pt4.parent = &pt2; pt5.parent = &pt2;
+    pt5.right = &pt6; pt6.parent = &pt5;
+    std::cout << std::endl << "Next node" << findNextInOrderNode(&pt1, &pt2)->val;
+    std::cout << std::endl << "Next node" << findNextInOrderNode(&pt1, &pt4)->val;
+    std::cout << std::endl << "Next node" << findNextInOrderNode(&pt1, &pt6)->val;
+    std::cout << std::endl << "Next node" << findNextInOrderNode(&pt1, &pt3);
 
+    //Judge a tree whether symmetric
+    TreeNode st1(1), st2(2), st3(2), st4(3), st5(4), st6(3), st7(3);
+    st1.left = &st2; st1.right = &st3;
+    st2.left = &st4; st2.right = &st5;
+    st3.left = &st6; st3.right = &st7;
+    std::cout << std::endl << "is symmetric " << isSymmetric(&st1);
 
+    //serialization and reserialization
+    char *str = Serialize(&st1);
+    TreeNode *stroot = Deserialize(str);
+    if (str)
+    {
+        delete str;
+        str = nullptr;
+    }
+    release(stroot);
+
+    //judge a string whether a valid numeric val
+    std::string str1("-3.3"), str2("+9.0E30"), str3("3.30a");
+    std::cout << std::endl << isNumeric(str1) << " "
+              << isNumeric(str2) << " "
+              << isNumeric(str3) << " ";
+
+    //find the first no repetition character
+    char strn[] = "student. a am I";
+    std::cout << std::endl << "First valid no rep cha is " << findStr(strn);
+
+    //reverse characters
+    std::cout << std::endl << "Before reverse "<< strn;
+    reverse(strn); reverseWords(strn);
+    std::cout << std::endl << "After reverse " << strn;
+
+    //rol of str
+    rol(strn, 5);
+    std::cout << std::endl << "result of rol" << strn;
+
+    //str to int
+    std::cout << std::endl << "Str to int is " << toInt(std::string("-3209"));
+
+    //full permutation
+    char strp[] = "aba";
+    std::cout << std::endl << "Full permutation 1 " << std::endl;
+    permute1(strp);
+    std::cout << std::endl << "Full permutation " << std::endl;
+    permute(strp, 0, strlen(strp) - 1);
+
+    //find repeated num
+    int intArr[] = {0, 2, 3, 2, 1};
+    std::cout << std::endl << "Find first repeated num " << firstRepeatedNum(intArr, sizeof(intArr)/sizeof(int));
+    std::cout << std::endl << "Find first repeated num in no group way " << firstRepeatedNum2(intArr, sizeof(intArr)/sizeof(int));
+
+    //cal multiply of vector grp
+    std::vector<int> grpA = {1, 2, 3, 4};
+    std::vector<int> grpB = genProduct(grpA);
+    std::cout << std::endl << "The result of multiply ";
+    for (auto i : grpB)
+    {
+        std::cout << " " << i;
+    }
+
+    std::cout << std::endl << std::endl << std::endl;
     return;
 }
