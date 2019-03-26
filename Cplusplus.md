@@ -597,11 +597,4 @@ std::sort_heap(std::begin(numbers), std::end(numbers));
 
 78. 考虑下堆插入的时间复杂度的问题（？）
 
-
-1
-2   3
-1 4 3 4
-
-5
-2    7
-1 3  6 8
+79. c++中^是异或操作符号

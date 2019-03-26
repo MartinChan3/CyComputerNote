@@ -11,6 +11,15 @@
 #include <hash_map>
 #include <set>
 
+template<class T>
+void print(std::vector<T> grp)
+{
+    for (auto i : grp)
+    {
+        std::cout << i << " ";
+    }
+}
+
 //02: replace space
 void replaceSpace(char *str, int length){
     int spaceCount = 0;
@@ -1217,11 +1226,192 @@ std::vector<int> genProduct(std::vector<int> &A)
     return B;
 }
 
+//Find one number only show once
+//Core: XOR operation has law of commutation, and 0 xor any = any
+int findOnceShowed(std::vector<int> &grp)
+{
+    int num = 0;
+
+    for (int i = 0; i < grp.size(); i++)
+    {
+        num ^= grp[i];
+    }
+
+    return num;
+}
+
 //Find two numbers only show once in group
 void findOnceShowed(std::vector<int> &grp, int &a, int &b)
 {
-    //0325 here
+    int sum = 0;
+    for (int i = 0; i < grp.size(); i++)
+        sum ^= grp[i];
 
+    sum &= -sum;
+    a = 0; b = 0;
+    for (int i = 0; i < grp.size(); i++)
+    {
+        if ((sum & grp[i]) == 0)
+            a ^= grp[i];
+        else
+            b ^= grp[i];
+    }
+}
+
+//Find two number whose sum is S
+//Use like Quick sort to move two guard from left and right
+std::vector<int> findTwoNumS(std::vector<int> &grp, int s)
+{
+    int i = 0, j = grp.size() - 1;
+    while (i < j)
+    {
+        int ts = grp[i] + grp[j];
+        if (ts == s)
+            break;
+        else if (ts < s)
+            i++;
+        else
+            j--;
+    }
+
+    std::vector<int> r = {grp[i], grp[j]};
+    return r;
+}
+
+//Find sequential positive int arr sum is S
+//Core: still use way like guards, move from front to the end
+int sum(int s, int e)
+{
+    return (s + e) * (e - s + 1) / 2;
+}
+
+void printSeq(int s, int e)
+{
+    for (int i = s; i <= e; i++)
+        std::cout << " " << i;
+    std::cout << std::endl;
+}
+
+void findSeqs(int S)
+{
+    int i = 0, j = 1;
+
+    while (1)
+    {
+        int r = sum(i, j);
+        if (S == r)
+        {
+           printSeq(i, j);
+           if (j < S)
+               j++;
+           else
+               i++;
+        }
+        else if (S < r)
+        {
+            if (i < j)
+                i++;
+        }
+        else
+        {
+            if (j < S)
+                j++;
+        }
+
+        if (i >= S / 2)
+            return;
+    }
+}
+
+//Move odd before even and keep seq of an int grp
+//Core: seq is important meaning that can't just exchange
+//like 1324578 can't just swap 2 and 5, has to do a rol before swap.
+void rol(std::vector<int> &grp, int s, int e)
+{
+    int t = grp[e];
+    for (int i = e; i > s; i--)
+        grp[i] = grp[i - 1]; //rol has to reverse the traverse here
+    grp[s] = t;
+}
+
+void moveOddFirst(std::vector<int> &grp)
+{
+    for (int i = 0; i < grp.size(); i++)
+    {
+        int val = grp[i];
+        if (!(val % 2))
+        {
+            bool findOdd(false);
+            int j = i + 1;
+            for (; j < grp.size(); j++)
+            {
+                int val2 = grp[j];
+                if (val2 % 2)
+                {
+                    findOdd = true;
+                    break;
+                }
+            }
+
+            if (!findOdd)
+                return;
+            else
+            {
+                rol(grp, i, j);
+            }
+        }
+    }
+}
+
+//Faster way(O(n)) but space sacrifice
+void moveOddFirst2(std::vector<int> &grp)
+{
+    std::vector<int> nGrpOdd, nGrpEven;
+    for (auto i : grp)
+    {
+        if (i & 1)
+            nGrpOdd.push_back(i);
+        else
+            nGrpEven.push_back(i);
+    }
+
+    nGrpOdd.insert(nGrpOdd.end(), nGrpEven.begin(), nGrpEven.end());
+    grp.swap(nGrpOdd);
+}
+
+//Return the num that more than half length of arr
+//1. sort(o(nlgn)): the middle is the most
+//2. o(n): pay attention to the times more than any num else
+int most(std::vector<int> &grp)
+{
+    int cNum(grp[0]), cTimes(0);
+    for (auto i : grp)
+    {
+        if (i == cNum)
+            cTimes++;
+        else
+        {
+            cTimes--;
+            if (!cTimes)
+            {
+                cNum = grp[1];
+                cTimes++;
+            }
+        }
+    }
+
+    //add checkout
+    int count(0);
+    for (auto i: grp)
+    {
+        if (i == cNum)
+            count++;
+    }
+
+    if (count > grp.size() / 2)
+        return cNum;
+    else
+        return 0;
 }
 
 void main()
@@ -1389,6 +1579,35 @@ void main()
     {
         std::cout << " " << i;
     }
+
+    //find once showed num
+    std::vector<int> grpC = {1, 2, 3, 1, 3};
+    std::cout << std::endl << "First once showed " << findOnceShowed(grpC);
+
+    //find two once showed num
+    std::vector<int> grpD = {1, 2, 3, 1};
+    int iF, iS;
+    findOnceShowed(grpD, iF, iS);
+    std::cout << std::endl << "Two once showed" << iF << " and " << iS;
+
+    //find two sum is s in a grp
+    std::vector<int> grpE = {1, 2, 3, 4, 5, 6, 7};
+    std::vector<int> grpEr = findTwoNumS(grpE, 8);
+    std::cout << std::endl << "Find Two sum in group is " << grpEr[0] << " and " << grpEr[1];
+
+    //Find full permutation of sum
+    int sum1 = 200;
+    std::cout << std::endl << "Full permutation of sum " << sum1 << std::endl;
+    findSeqs(sum1);
+
+    //Move odd to left and keep seq
+    std::vector<int> grpH = {1, 3, 2, 4, 5, 7, 8, 9, 9, 10, 12};
+    moveOddFirst2(grpH);
+    print(grpH);
+
+    //Find the most num in grp
+    std::vector<int> grpI = {1, 2, 3, 2, 4, 2, 2, 2, 2, 2, 5, 6, 7, 8, 9};
+    std::cout << std::endl << " The most in grp " << " is " << most(grpI);
 
     std::cout << std::endl << std::endl << std::endl;
     return;
