@@ -11,6 +11,8 @@
 #include <hash_map>
 #include <set>
 
+#define MODULE 100000007
+
 template<class T>
 void print(std::vector<T> grp)
 {
@@ -1414,6 +1416,514 @@ int most(std::vector<int> &grp)
         return 0;
 }
 
+//Find the most sub-seq sum
+//Core(O(n)): think left sub-seq whether contribute to
+//final(> 0 or not),if not then refresh it
+int mostSubSeq(std::vector<int> &grp)
+{
+    if (grp.size() == 0)
+        return 0;
+    int total = grp[0];
+    int maxSum = grp[0];
+    for (int i = 1; i < grp.size(); i++)
+    {
+        if (total >= 0)
+            total += grp[i];
+        else
+            total = grp[i];
+        if (total > maxSum)
+            maxSum = total;
+    }
+
+    return maxSum;
+}
+
+//O(nlogn): Divide method recursively, very classic
+int mostSubSeq2(std::vector<int> &grp, int s, int e)
+{
+    if (s == e)
+    {
+        if (grp[s] > 0)
+            return grp[s];
+        else
+            return 0;
+    }
+
+    int middle = (s + e) / 2;
+    int maxLeftSum = mostSubSeq2(grp, s, middle);
+    int maxRightSum = mostSubSeq2(grp, middle + 1, e);
+
+    int maxLeftBorderSum = 0, leftBoderSum = 0;
+    for (int i = middle; i >= s; i-- )
+    {
+        leftBoderSum += grp[i];
+        if (leftBoderSum > maxLeftBorderSum)
+            maxLeftBorderSum = leftBoderSum;
+    }
+
+    int maxRightBoderSum = 0, rightBorderSum = 0;
+    for (int i = middle + 1; i <= e; i++)
+    {
+        rightBorderSum += grp[i];
+        if (rightBorderSum > maxRightBoderSum)
+            maxRightBoderSum = rightBorderSum;
+    }
+
+    int maxLeftRightSum = maxLeftBorderSum + maxRightBoderSum;
+
+    int maxSubSum = 0;
+    maxSubSum = maxLeftSum > maxRightSum ? maxLeftSum: maxRightSum;
+    maxSubSum = maxSubSum > maxLeftRightSum ? maxSubSum: maxLeftRightSum;
+
+    return maxSubSum;
+}
+
+//Arrange the num arr to minist num
+std::stack<int> weishu(int i)
+{
+    std::stack<int> q;
+    do
+    {
+        q.push( i % 10);
+        i /= 10;
+    }while(i);
+    return q;
+}
+
+bool less(int x, int y)
+{
+    std::stack<int> qx = weishu(x);
+    std::stack<int> qy = weishu(y);
+
+    int last = qx.top();
+    while (1)
+    {
+        if (qx.empty() && qy.empty())
+            return false;
+        if (qx.empty())
+        {
+            if (qy.top() > last)
+                return true;
+            else
+                return false;
+        }
+        if (qy.empty())
+        {
+            if (qx.top() < last)
+                return true;
+            else
+                return false;
+        }
+        if (qx.top() == qy.top())
+        {
+            last == qx.top();
+            qx.pop();
+            qy.pop();
+        }
+        else
+        {
+            if (qx.top() < qy.top())
+                return true;
+            else
+                return false;
+        }
+    }
+}
+
+void printToMinist(std::vector<int> &grp)
+{
+    std::sort(grp.begin(), grp.end(), less);
+    print(grp);
+}
+
+//Find all reverse-order pairs
+//Like merge-sort, divide-and-conquer
+
+//An example of merge-sort
+void mergeSortSubSort(std::vector<int> &grp, int s, int e, int middle)
+{
+    int leftp = s;
+    int rightp = middle + 1;
+
+    std::vector<int> sortedIntArr;
+    while (rightp <= e)
+    {
+        if (leftp <= middle)
+        {
+            if (grp[leftp] <= grp[rightp])
+            {
+                sortedIntArr.push_back(grp[leftp]);
+                leftp++;
+            }
+            else
+            {
+                sortedIntArr.push_back(grp[rightp]);
+                rightp++;
+            }
+        }
+        else
+        {
+            sortedIntArr.push_back(grp[rightp++]);
+        }
+    }
+
+    //Make sure left division and right division was
+    //totally concerned
+    while (leftp <= middle)
+        sortedIntArr.push_back(grp[leftp++]);
+
+    for (int i = 0; i < sortedIntArr.size(); i++)
+    {
+        grp[i + s] = sortedIntArr[i];
+    }
+}
+
+void mergeSort(std::vector<int> &grp, int s, int e)
+{
+    if (e == s)
+        return;
+    else if (e - s == 1)
+    {
+        if (grp[s] > grp[e])
+            swap(grp.data() + s, grp.data() + e);
+    }
+    else
+    {
+        //Divide
+        int middle = (s + e) / 2;
+        mergeSort(grp, s, middle);
+        mergeSort(grp, middle + 1, e);
+
+        //Conquer
+        mergeSortSubSort(grp, s, e, middle);
+    }
+}
+
+void mergeSortSubSortCount(std::vector<int> &grp, int s, int e, int middle, int& count)
+{
+    int leftp = s;
+    int rightp = middle + 1;
+
+    std::vector<int> sortedIntArr;
+    while (rightp <= e)
+    {
+        if (leftp <= middle)
+        {
+            if (grp[leftp] <= grp[rightp])
+            {
+                sortedIntArr.push_back(grp[leftp]);
+                leftp++;
+            }
+            else
+            {
+                sortedIntArr.push_back(grp[rightp]);
+                count += (middle - leftp + 1);
+                rightp++;
+            }
+        }
+        else
+        {
+            sortedIntArr.push_back(grp[rightp++]);
+        }
+    }
+
+    while (leftp <= middle)
+        sortedIntArr.push_back(grp[leftp++]);
+
+    for (int i = 0; i < sortedIntArr.size(); i++)
+    {
+        grp[i + s] = sortedIntArr[i];
+    }
+}
+
+void mergeSortCount(std::vector<int> &grp, int s, int e, int &count)
+{
+    if (e == s)
+        return;
+    else if (e - s == 1)
+    {
+        if (grp[s] > grp[e])
+        {
+            swap(grp.data() + s, grp.data() + e);
+            count++;
+        }
+    }
+    else
+    {
+        //Divide
+        int middle = (s + e) / 2;
+        mergeSortCount(grp, s, middle, count);
+        mergeSortCount(grp, middle + 1, e, count);
+
+        //Conquer
+        mergeSortSubSortCount(grp, s, e, middle, count);
+    }
+}
+
+int findAllReverseOrderPairs(std::vector<int> &grp)
+{
+    int count = 0;
+    mergeSortCount(grp, 0, grp.size() - 1, count);
+    return count;
+}
+
+//Find how many times a num was showed in a seq arr
+//Just find the first index and last index is ok, so d-c way again
+int findNumNode(std::vector<int> &grp, int s, int e, int targetNum)
+{
+    int middle = (s + e) / 2;
+
+    if (grp[middle] == targetNum)
+        return middle;
+    if (s == e)
+        return -1;
+    int tmp = -1;
+    if (grp[middle] > targetNum)
+    {
+        tmp = findNumNode(grp, s, middle, targetNum);
+        if (tmp != -1)
+            return tmp;
+    }
+    else
+    {
+        tmp = findNumNode(grp, middle, e, targetNum);
+        if (tmp != -1)
+            return tmp;
+    }
+}
+
+int times(std::vector<int> &grp, int targetNum)
+{
+    int cIndex = findNumNode(grp, 0, grp.size() - 1, targetNum);
+
+    if (cIndex == -1)
+        return 0;
+    int cLeft = cIndex, cRight = cIndex;
+    while (grp[cLeft] == targetNum && cLeft >= 0)
+        cLeft--;
+    while (grp[cRight] == targetNum && cRight <= grp.size() - 1)
+        cRight++;
+
+    return  (--cRight - ++cLeft + 1);
+}
+
+//Improvement: use before and after way to find first num an last
+int getFirstK(std::vector<int> &array, int k, int start, int end)
+{
+    if (start > end)
+        return -1;
+    int midIndex = (start + end) / 2;
+    int midData = array[midIndex];
+    if (midData == k)
+    {
+        //Judge whether is the first K
+        if (midIndex > 0 && array[midIndex - 1] != k || midIndex == 0)
+            return midIndex;
+        else
+            end = midIndex - 1;
+    }
+    else if (midData > k)
+        end = midIndex - 1;
+    else
+        start = midIndex + 1;
+    return getFirstK(array, k, start, end);
+}
+
+int getLastK(std::vector<int> &array, int k, int start, int end)
+{
+    if (start > end)
+        return -1;
+    int midIndex = (start + end) / 2;
+    int midData = array[midIndex];
+
+    if (midData == k)
+    {
+        if (midIndex < array.size() && array[midIndex + 1] != k || midIndex == array.size())
+            return midIndex;
+        else
+            start = midIndex + 1;
+    }
+    else if (midData > k)
+    {
+        end = midIndex - 1;
+    }
+    else
+    {
+        start = midIndex + 1;
+    }
+    return getLastK(array, k, start, end);
+}
+
+int times2(std::vector<int> &grp, int targetNum)
+{
+    int firstK = getFirstK(grp, targetNum, 0, grp.size() - 1);
+    int lastK = getLastK(grp, targetNum, 0, grp.size() - 1);
+    return lastK - firstK + 1;
+}
+
+//Find val of 1+2+3+...+n , no judge no loop
+//Core: use a AND opeartion to avoid n < 0, like recurse stops at n = 0
+//Like short current circuit of recursion
+int SumSolution(int n)
+{
+    int result = 0;
+    int temp = 0;
+    bool flag = (n > 0) && (temp == (result = SumSolution(n - 1)));
+    result += n;
+    return result;
+}
+
+//Sum without 4 operations
+int sumWithout4Operations(int a, int b)
+{
+    int ta(a), tb(b);
+    int c1(0x1), c0(0x0);
+    int r(0x0);
+    bool carryBit = false;
+    while (ta != 0 || tb!= 0)
+    {
+        bool cA = ta & 0x1;
+        bool cB = tb & 0x1;
+
+        if ((cA && cB) ||
+            (!cA && cB && carryBit) ||
+            (cA && !cB && carryBit)   )
+        {
+            if (cA && cB && carryBit)
+                r = r | c1;
+            else
+                r = r | c0;
+            carryBit = true; //When carry-over
+        }
+        else if (!cA && !cB)
+        {
+            if (carryBit)
+                r = r | c1;
+            else
+                r = r | c0;
+            carryBit = false;
+        }
+        else
+        {
+            if (carryBit)
+                r = r | c0;
+            else
+                r = r | c1;
+            carryBit = false;
+        }
+
+        c1 <<= 1;
+        c0 <<= 1;
+        ta >>= 1;
+        tb >>= 1;
+    }
+
+    if (carryBit)
+        r = r | c1;
+
+    return r;
+}
+
+//Improvement: Simulate like what in decimal
+//1. Add each bit without carry-over, and bianry addition equals xor operation(^ in C++ and Java)
+//2. Cal carry-over ,then lor 1;
+//3. Loop the above two result;
+int sumWithout4Operations2(int a, int b)
+{
+    int sum  = a;
+    int carry = 0;
+    while (b != 0)
+    {
+        sum = a ^ b;
+        carry = (a & b) << 1;
+        a = sum;
+        b = carry; //End when there no carry
+    }
+
+    return sum;
+}
+
+int sumWithout4OperationsRecursive(int a, int b)
+{
+    if (b != 0)
+        return sumWithout4OperationsRecursive(a ^ b, (a & b) << 1);
+    else
+        return a;
+}
+
+//Find the smallest val in a lor arr
+int findSmallestInLor(std::vector<int> &lorGrp, int start, int end)
+{
+    if (start > end)
+        return INT_MIN;
+    if (start == end)
+        return lorGrp[start];
+    int midIndex = (start + end) / 2;
+    if (lorGrp[midIndex] < lorGrp[end])
+    {
+        if (lorGrp[midIndex - 1] > lorGrp[midIndex])
+            return lorGrp[midIndex];
+        else
+            return findSmallestInLor(lorGrp, start, midIndex);
+    }
+    else if (lorGrp[midIndex] > lorGrp[end])
+    {
+        return findSmallestInLor(lorGrp, midIndex, end);
+    }
+    else
+    {
+        return lorGrp[end];
+    }
+}
+
+//Times of cha '1' has between 1 to n
+///Wait to see how to solve
+int timesOf1(int n)
+{
+    int low, cur, temp, i = 1;
+    int high = n;    //Record high pos
+    int total = 0;   //Times of 1
+    if (n < 1)
+        return 0;
+    while (high != 0)
+    {
+        high = n / pow(10, i);
+        temp = n % int(pow(10, i));
+        cur = temp / pow(10, i - 1);
+        low = temp / pow(10, i - 1);
+        if (cur == 1)
+            total += high * pow(10, i - 1) + low + 1;
+        else if (cur > 1)
+            total += (high + 1) * pow(10, i - 1);
+        else
+            total += high * pow(10, i - 1);
+
+        i++;
+    }
+    return total;
+}
+
+//Judge straight flush
+bool straightFlush(std::vector<int> grp)
+{
+    std::sort(grp.begin(), grp.end());
+    if (grp[grp.size() - 2] == 0)
+        return true;
+    int sIndex = 0;
+    for (; sIndex < grp.size(); sIndex++)
+    {
+        if (grp[sIndex])
+            break;
+    }
+
+    int dis = grp[grp.size() - 1] - grp[sIndex];
+    if (dis > 4)
+        return false;
+
+}
+
+
+
 void main()
 {
     //02 replace space
@@ -1608,6 +2118,46 @@ void main()
     //Find the most num in grp
     std::vector<int> grpI = {1, 2, 3, 2, 4, 2, 2, 2, 2, 2, 5, 6, 7, 8, 9};
     std::cout << std::endl << " The most in grp " << " is " << most(grpI);
+
+    //Find the most sub-seq in a seq
+    std::vector<int> grpJ = {6,-3,-2,7,-15,1,2,2};
+    std::cout << std::endl << "The most sub-seq sum is " << mostSubSeq(grpJ);
+    std::cout << std::endl << "The most sub-seq sum is " << mostSubSeq2(grpJ, 0, grpJ.size() - 1);
+
+    //Print the most minist arrangment of grp
+    std::vector<int> grpK = {3,32,321};
+    std::cout << std::endl << "The minist arrangement is ";
+    printToMinist(grpK);
+
+    //merge-sort
+    std::vector<int> grpL = {6, 2, 1, 4, 3, 8, 7, 5};
+    mergeSort(grpL, 0, grpL.size() - 1);
+    std::cout << std::endl << "Merge sort of the grp is ";
+    print(grpL);
+
+    //find reversed-pairs number
+    std::vector<int> grpM = {1, 2, -1, 3, 0};
+    std::cout << std::endl << "All reversed-pairs number is " << findAllReverseOrderPairs(grpM);
+
+    //find times of repeated num in a seq arr
+    std::vector<int> grpN = {1, 2, 2, 2, 2, 2, 3, 3, 4};
+    std::cout << std::endl << "Repeat times of 2 is " << times(grpN, 2);
+    std::cout << std::endl << "Repeat times of 2 is " << times2(grpN, 2);
+
+    //Sum of 1 to n
+    std::cout << std::endl << "Sum of 1 to 100 is " << SumSolution(100);
+
+    //Sum with no 4 opeartions
+    std::cout << std::endl << "Sum without 4 opeartions is " << sumWithout4Operations(18, 263);
+    std::cout << std::endl << "Sum without 4 operations2 is " << sumWithout4Operations2(7, 5);
+    std::cout << std::endl << "Sum without 4 operations2 is " << sumWithout4OperationsRecursive(117, 125);
+
+    //Find smallest val in lor array
+    std::vector<int> grpO = {61, 2, 3, 4, 5, 6};
+    std::cout << std::endl << "The result of LOR array is " << findSmallestInLor(grpO, 0, grpO.size() - 1);
+
+    //Times of 1 in range 1 to n
+    std::cout << std::endl << "The result of 1 chars in 1 to 2593 is " << timesOf1(2593);
 
     std::cout << std::endl << std::endl << std::endl;
     return;
