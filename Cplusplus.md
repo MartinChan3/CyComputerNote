@@ -619,3 +619,88 @@ qApp->processEvents(QEventLoop::ExcludeUserInputEvents);//它可以忽略用户�
 85. 多线程使用中，只可以在QObject（及其子类）被创建的线程进行其操作，不可以进行跨线程的QObject的添加和修改；
  
 86. 二分法并非全部递归——二分法只是略过大部分内容一次，不需要完全遍历
+
+87. 网上一个QML例子给出了较好的以鼠标为中心的缩放办法：
+```   
+ApplicationWindow {
+    visible: true
+    width: 640
+    height: 480
+    title: qsTr("自由缩放")
+
+    // 定义缩放比例系数变量,范围在(-10,10)之间
+    property double scaleValue: 1.1
+    property int scaleLevel: 0
+
+    function zoomIn(x,y){
+        var beforeWidth  = showImg.width
+        var beforeHeight = showImg.height
+        showImg.width = showImg.width   * scaleValue
+        showImg.height = showImg.height * scaleValue
+        showImgMouseArea.width = showImg.width
+        showImgMouseArea.height = showImg.height
+
+        showImg.x = showImg.x + x - showImg.width  * x / beforeWidth
+        showImg.y = showImg.y + y - showImg.height * y / beforeHeight
+        scaleLevel++
+    }
+
+    function zoomOut(x,y){
+        var beforeWidth  = showImg.width
+        var beforeHeight = showImg.height
+        showImg.width = showImg.width   / scaleValue
+        showImg.height = showImg.height / scaleValue
+        showImgMouseArea.width = showImg.width
+        showImgMouseArea.height = showImg.height
+        showImg.x = showImg.x + x - showImg.width  * x / beforeWidth
+        showImg.y = showImg.y + y - showImg.height * y / beforeHeight
+        scaleLevel--
+    }
+
+     Rectangle{
+         id:showImg
+         width: 100
+         height: 100
+         color: "lightblue"
+     }
+
+     MouseArea{
+         id: showImgMouseArea
+         anchors.fill: showImg
+         //设置拖拽对象以及拖拽区域
+         drag.target: showImg
+         drag.axis: Drag.XAndYAxis//设置横向纵向拖动
+
+         //设置鼠标悬停以及鼠标响应
+         hoverEnabled: true
+
+         // 鼠标滚轮处理函数
+         onWheel: {
+             if(wheel.angleDelta.y>0&&scaleLevel<=10){//图像放大处理
+                 showImg.transformOriginPoint.x = wheel.x
+                 showImg.transformOriginPoint.y = wheel.y
+                 zoomIn(wheel.x,wheel.y)
+             }
+             else if(wheel.angleDelta.y<0&&scaleLevel>=-10){//图像缩小处理
+                 showImg.transformOriginPoint.x = wheel.x
+                 showImg.transformOriginPoint.y = wheel.y
+                 zoomOut(wheel.x,wheel.y)
+             }
+         }
+     }
+}
+```   
+
+88. Java和JS中，双等于号等价于只比较值，不比较类型，三等于号等价于既比较值又比较类型   
+
+89. 反斜杠(\，backslash)C++中既可以表示转义字符，又可以表示下一行和该行的内容连续（类似TrioBasic中的连续）
+
+90. 井号在预编译中的作用：   
+# 字符化操作   
+## 标记链接符号   
+
+91. pointSize和pointSize: pixelSize是指所占的像素大小，在某些高DPI的设备上，字就会显得比较小
+pointSize指的是实际的肉眼字体大小，与显示器无关   
+
+92. QML数据和C++基本数据类型的关系：   
+![QML基本数据类型表](https://static.oschina.net/uploads/img/201704/03152700_AyRk.png )
