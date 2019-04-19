@@ -703,4 +703,10 @@ ApplicationWindow {
 pointSize指的是实际的肉眼字体大小，与显示器无关   
 
 92. QML数据和C++基本数据类型的关系：   
-![QML基本数据类型表](https://static.oschina.net/uploads/img/201704/03152700_AyRk.png )
+![QML基本数据类型表](https://static.oschina.net/uploads/img/201704/03152700_AyRk.png )   
+
+93. QML中的QtObject是非可视化元素，适合于存储一系列设定的属性内容，可以形成和C++类似的结构体参数。
+
+94. QML同样面临优化的问题：内部使用的大量的相同基础变量应该使用类似单例的编程办法，只在生成时导出一次
+
+95. MVC在Qt中的基本用法：new一个QtStandardItemModel出来，然后往该模型中填充数据；然后绑定到QDataWidgetMapper上去，最后map到界面上的对应内容；
