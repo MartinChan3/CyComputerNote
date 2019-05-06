@@ -710,3 +710,14 @@ pointSize指的是实际的肉眼字体大小，与显示器无关
 94. QML同样面临优化的问题：内部使用的大量的相同基础变量应该使用类似单例的编程办法，只在生成时导出一次
 
 95. MVC在Qt中的基本用法：new一个QtStandardItemModel出来，然后往该模型中填充数据；然后绑定到QDataWidgetMapper上去，最后map到界面上的对应内容；
+
+96. QML从C++向QML方向，必须设定C++部分暴露的内容为Q_PROPERTY部分，否则无法正确搞定；
+
+97. QML端的Map信息如何传递：[CSDN](https://blog.csdn.net/fxy0325/article/details/85058662 )    
+注意var本身要初始化为{},如果是property还需要对初始键值对类型进行初始化；   
+
+98. QML和C++类型的互相转换：[QtDoc](https://doc.qt.io/qt-5/qtqml-cppintegration-data.html )
+
+99. QML部分存在的属性请不要在QML中以后面带括号的形式调用，本身并不支持类似的操作，尤其是部分可读属性；（例如StackView）
+
+100. 折腾的QML发布：总体来说标准的可以使用的QML发布过程比较麻烦，首先将QML放置于bin文件夹下，再复制bin、plugin、qml以及translation共计4个文件夹，再打开并尝试删除；最终得到的内容即可；
