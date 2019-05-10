@@ -721,3 +721,10 @@ pointSize指的是实际的肉眼字体大小，与显示器无关
 99. QML部分存在的属性请不要在QML中以后面带括号的形式调用，本身并不支持类似的操作，尤其是部分可读属性；（例如StackView）
 
 100. 折腾的QML发布：总体来说标准的可以使用的QML发布过程比较麻烦，首先将QML放置于bin文件夹下，再复制bin、plugin、qml以及translation共计4个文件夹，再打开并尝试删除；最终得到的内容即可；
+
+101. 应当广泛的使用正则表达式在网页信息抓取中，这是由html和xml格式决定的；
+
+102. 需要重新审视下XML和JSON文件格式，学会正确的读取二者；
+
+103. 编码问题：从很多api(例如zlib)传递回来的文件编码，是基于本地的GBK16位内码，必须先通过QString::fromLocal8Bit进行转化才可以得到正确的Unicode编码（Qt内部默认使用Unicode编码作为传输文件的基础）。同样的反而行之，如果需要在windows的api中进行操作，应该也要将Unicode编码转为GBK。    
+简单来说区别就是：前者使用QString::fromLocal8Bit，后者使用QString::toLocal8Bit()方法。
