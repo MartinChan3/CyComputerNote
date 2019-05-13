@@ -728,3 +728,4 @@ pointSize指的是实际的肉眼字体大小，与显示器无关
 
 103. 编码问题：从很多api(例如zlib)传递回来的文件编码，是基于本地的GBK16位内码，必须先通过QString::fromLocal8Bit进行转化才可以得到正确的Unicode编码（Qt内部默认使用Unicode编码作为传输文件的基础）。同样的反而行之，如果需要在windows的api中进行操作，应该也要将Unicode编码转为GBK。    
 简单来说区别就是：前者使用QString::fromLocal8Bit，后者使用QString::toLocal8Bit()方法。
+
