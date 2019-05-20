@@ -727,5 +727,8 @@ pointSize指的是实际的肉眼字体大小，与显示器无关
 102. 需要重新审视下XML和JSON文件格式，学会正确的读取二者；
 
 103. 编码问题：从很多api(例如zlib)传递回来的文件编码，是基于本地的GBK16位内码，必须先通过QString::fromLocal8Bit进行转化才可以得到正确的Unicode编码（Qt内部默认使用Unicode编码作为传输文件的基础）。同样的反而行之，如果需要在windows的api中进行操作，应该也要将Unicode编码转为GBK。    
-简单来说区别就是：前者使用QString::fromLocal8Bit，后者使用QString::toLocal8Bit()方法。
+简单来说区别就是：前者使用QString::fromLocal8Bit，后者使用QString::toLocal8Bit()方法。   
 
+104. 常用C++宏定义：1) #error message: 类似Q_ASSERT()，不过只要执行了就会弹出报错；message内容不需要添加双引号包围。2) #line 用于强制指定新的行号和编译文件名，并且对源程序的代码进行重新编号，用法为#line number newFilename 3) pragma 用于自定义编译消息，其中#pragma message("content...")类似正常的输出内容, #pragma once表示只编译一次，#pragma pack(int n)表示字节对齐方式。
+
+105. 所以do {} while(0)的使用时为了保证宏定义的使用者能无编译错误的用宏。[csdn](https://blog.csdn.net/weibo1230123/article/details/81904498 )  （简单来说不需要加后缀） 
