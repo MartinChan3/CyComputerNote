@@ -514,4 +514,630 @@ QImage scaledToWidth(const QImage &image)
 ```
 QList<QImage> iamges =...;
 QFuture<QImage> thumbnails = QtConcurrent::mapped(images, std::bind(&QImage::scaledToWidth, 100, Qt::Transformation));
+```   
+
+
+## Qt Concurrent Filter和Filter-reduce   
+其用法和map类似，同样具有filter()、filtered()和filteredReduced()三个函数，不过都是对一个序列中的内容进行过滤；   
+
+## Qt Concurrent Run  
+QtConcurrent::run()函数在一个单独的线程中运行一个函数，函数的返回值通过QFutureAPI提供。   
+### 在单独的线程中运行函数   
+```
+extern void aFunction();
+QFuture<void> future = QtConcurrent::run(aFunction);
+```   
+这将在从默认的QThreadPool获取的单独的线程中运行aFunction，可以使用QFuture和QFutureWathcer监控函数的状态；   
+如果要使用专门的线程池，可以传递QThreadPool作为第一个参数： 
+```  
+extern void aFunction();
+QThreadPool pool;
+QFuture<void> future = QtConcurrent::run(&pool, aFunction);
+```   
+### 将参数传递给函数   
+将参数传递给函数，是通过将它们添加到QtConcurrent::run()直接调用在函数名之后（类似于arg），例如： 
+```
+extern void aFunctionWithArguments(int arg1, double arg2, const QString &string);
+int integer;
+double floatingPoint;
+QString string;
+
+QFuture<void> future = QtConcurrent::run(aFunctionWithArguments, integer, floatingPoint, string);
+```   
+每个参数的副本在调用QtConcurrent::run()的时候产生，而当函数开始执行时，这些值被传递给线程。**调用QtConcurrent::run()后对参数所做的更改对于线程来说不可见。**   
+### 从函数返回值   
+该函数的任何返回值都可以通过QFuture可见：   
+```
+extern QString functionReturningAString();
+QFuture<QString> future = QtConcurrent::run(functionReturningAString);    
+...
+QString result = future.result();
+```   
+传递参数和上文所述一样：   
+```
+extern QString someFunction(const QByteArray &input);
+
+QByteArray bytearray = ...;
+
+QFuture<QString> future = QtConcurrent::run(someFunction, bytearray);
+...
+QString result = future.result();
+```   
+Tip: QFuture::result()函数阻塞并且等待通知结果可用，当函数执行完成并且结果可用时，使用QFutureWatcher获取通知。   
+
+### 附加API功能   
+### 使用成员函数   
+类似map三人组，run()也接受指向成员函数的指针，第一个参数必须是const引用或者指向类的实例的指针。在调用const成员函数的时候，const引用的传递是很有用的，传递指针对于调用修改实例的非const成员非常有用。 (简单来说就是通过引用和指针来区分是常成员函数还是非常成员函数)     
+例如，在单独的线程中调用QByteArray::split()(一个const成员函数)是这样做的：   
+```
+// 在一个单独的线程中调用 QList<QByteArray> QByteArray::split(char sep) const
+QByteArray bytearray = "hello world";
+QFuture<QList<QByteArray> > future = QtConcurrent::run(bytearray, &QByteArray::split, ',');
+...
+QList<QByteArray> result = future.result();
+```   
+调用非const成员函数是这样：   
+```
+// 在一个单独的线程中调用 void QImage::invertPixels(InvertMode mode) 
+QImage image = ...;
+QFuture<void> future = QtConcurrent::run(&image, &QImage::invertPixels, QImage::InvertRgba);
+...
+future.waitForFinished();
+// 此时，image 中的像素已经被反转
+```      
+### 使用绑定函数参数   
+在调用时，可以使用std::bind()将一些参数绑定到函数，如果C++11不可用，boost::bind()或者std::tr1::bind()是合适的替代品。   
+有许多需要绑定的原因：    
+- 调用需要超过5个参数的函数；   
+- 简化使用常量参数调用函数；   
+- 更改参数的顺序。   
+调用绑定函数是这样：   
+```
+void someFunction(int arg1, double arg2);
+QFuture<void> future = QtConcurrent::run(std::bind(someFunction, 1, 2.0));
+```   
+
+
+## QFuture
+QFuture代表一个异步计算的结果，它允许线程与一个或者多个结果同步，而这些结果将在稍后的事件点准备就绪，该结果可以是具有默认构造函数和拷贝构造函数的任何类型。如果一个结果在调用result()、resultAt()或者results()函数不可用的时候，QFuture将进行等待，直到结果可用位置，使用isResultReadyAt()函数可以检测结果是否已经准备就绪；   
+进度信息由progressValue()、progressMinimum()、progressMaximun()和progressText()函数提供。   
+### 基本使用   
+```
+#include <QCoreApplication>
+#include <QtConcurrent/QtConcurrentRun>
+#include <QDebug>
+
+void hello(const QString &name)
+{
+    qDebug() << "Hello" << name << "from" << QThread::currentThread();
+}
+
+int main(int argc, char *argv[])
+{
+    QCoreApplication a(argc, argv);
+
+    qDebug() << "Main Thread" << QThread::currentThread();
+
+    // 在一个单独的线程中调用 hello()
+    QFuture<void> f1 = QtConcurrent::run(hello, QString("Qter"));
+    QFuture<void> f2 = QtConcurrent::run(hello, QString("Pythoner"));
+
+    // 阻塞调用线程并等待计算完成，确保所有结果可用
+    f1.waitForFinished();
+    f2.waitForFinished();
+}
+```   
+输出结果如下所示：   
+```
+Main Thread QThread(0x398fc0)
+Hello “Qter” from QThread(0x39c240, name = “Thread (pooled)”)
+Hello “Pythoner” from QThread(0x39c280, name = “Thread (pooled)”)
+```   
+显然，主线程和另外两个线程均不同。   
+QFuture<void>专用于获取不包含任何结果的函数，任何QFuture<T>都可以分配或者复制到QFuture<void>。如果只需要获得状态或者进度信息，而不需要实际结果数据，就一般采用这样的方法。   
+### 高级操作   
+QFuture最亮眼的，是它提供了一些列与正在进行的异步调用进行交互，例如使用cancel()函数取消计算；要暂停计算，使用setPaused()函数或者pause()、resume()、toogglePaused()函数之一。   
+助手中有一句很关键的话：    
+```
+Be aware that not all asynchronous computations can be canceled or paused. For example, the future returned by QtConcurrent::run() cannot be canceled; but the future returned by QtConcurrent::mappedReduced() can
+```   
+意思说是并非所有的异步计算都可以被取消，例如QtConcurrent::run()返回的future不能被取消，但是QtConcurrent::mappedReduced()返回的可以。   
+来看一组对于图像缩放的示例：   
+```
+#include <QImage>
+#include <QDebug>
+#include <QGuiApplication>
+#include <QtConcurrent/QtConcurrentMap>
+
+QImage scale(const QImage &image)
+{
+    qDebug() << "Scaling image in thread" << QThread::currentThread();
+    return image.scaled(QSize(100, 100), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+}
+
+int main(int argc, char *argv[])
+{
+    QGuiApplication app(argc, argv);
+
+    const int imageCount = 20;
+
+    // 创建一个列表包含 imageCount 个图像
+    QList<QImage> images;
+    for (int i = 0; i < imageCount; ++i)
+        images.append(QImage(1600, 1200, QImage::Format_ARGB32_Premultiplied));
+
+    // 使用 QtConcurrent::mapped 对每个图像应用 scale 函数（缩放）
+    QFuture<QImage> thumbnails = QtConcurrent::mapped(images, scale);
+
+    // 暂停计算
+    thumbnails.pause();
+    qDebug() << "isPaused" << thumbnails.isPaused();
+
+    // 恢复计算
+    if(thumbnails.isPaused()) {
+        thumbnails.resume();
+        qDebug() << "isStarted" << thumbnails.isPaused();
+    }
+
+    // 阻塞调用线程并等待计算完成，确保所有结果可用
+    thumbnails.waitForFinished();
+
+    // 返回 future 的所有结果
+    QList<QImage> list = thumbnails.results();
+    foreach (QImage image, list) {
+        qDebug() << image;
+    }
+
+    qDebug() << "********************";
+
+    // 返回 future 的结果数
+    int nCount = thumbnails.resultCount();
+    for (int i = 0; i < nCount; ++i) {
+        QImage image = thumbnails.resultAt(i);
+        qDebug() << image;
+    }
+
+    return 0;
+}
+```   
+为了演示效果，调用了mapped()之后，使用pause()暂停计算，然后通过isPaused()来查询QFuture表示的状态。状态可以通过isCanceled()、isStarted()、isFinished()、isRunning()或者isPaused()函数来查询。   
+Tip: 即使isPaused()返回为true,计算仍然可能在运行中。   
+要访问future中的结果，可以使用索引位置，一些QFuture的成员函数将索引作为它们的第一个参数，例如resultAt()，使得其可以在不使用迭代器的情况下访问。   
+对于拥有多个结果的QFuture对象，resultCount()函数返回连续结果的数量，这意味着从0到resultCount()的结果始终是安全的。   
+### 迭代器   
+QFuture提供了一个Java风格迭代器(QFutureIterator)和一个stl风格迭代器(QFuture::const_iterator):   
+- Java风格迭代器：高级易于使用，但是效率略低；   
+- STL风格迭代器：低级，实用麻烦，但是效率高；   
+使用这两种迭代器是访问QFuture对象中的另一种方法。   
+### QFutureIterator   
+QFutureIterator为QFuture提供了一个Java风格的const迭代器。   
+QFutureIterator<T>允许遍历QFuture<T>，其构造函数使用QFuture作为其参数，构造后就位于列表的开始端，如下：    
+```
+QFuture<QString> future;
+...
+QFutureIterator<QString> i(future);
+while (i.hasNext())
+    qDebug() << i.next();
+```
+Tip:next()函数从future返回下一个结果（如果需要，要等它变得可用）并且推进迭代器——注意，和C++风格迭代器完全不同的是，Java风格的迭代器指向结果之间，而不是直接指向结果，例如第一次调用next()将迭代器推进到结果1和结果2之间，但是返回第一个结果；   
+![Java风格迭代器示意图](https://img-blog.csdn.net/20161025171723591 )
+反向的迭代顺序同理：   
+```
+QFutureIterator<QString> i(future);
+i.toBack();
+while (i.hasPrevious())
+    qDebug() << i.previous();
+```    
+如果需要查找特定的所有值，可以在循环中使用findNext()或者findPrevious()。   
+可以在同一个future中使用多个迭代器，如果future在QFutureIterator处于活动状态时被修改，QFutureIterator将继续迭代原始的future，忽略修改的副本。   
+### QFuture::const_iterator   
+QFuture::const_iterator类为QFuture提供了一个STL风格的const迭代器。   
+默认的QFuture::const_iterator构造函数会创建一个未初始化的迭代器，在开始迭代以前，必须使用QFuture::constBegin()或者QFuture::constEnd()等QFuture函数进行初始化；   
+```
+QFuture<QString> future = ...;
+
+QFuture<QString>::const_iterator i;
+for (i = future.constBegin(); i != future.constEnd(); ++i)
+    cout << *i << endl;
+```
+
+## Qt之QFutureWatcher   
+QFuture表示异步计算的结果，而QFutureWatcher则允许使用信号和槽监视QFuture，也就是说QFutureWatcher是为QFuture而生的。    
+### 详细描述    
+QFutureWatcher提供了有关QFuture的信息和通知，通过setFuture()函数来监视一个特定的QFuture，函数future()则返回由setFuture()设置的future。   
+为了方便，QFuture的很多函数可以直接通过QFutureWatcher来进行访问，例如： progressValue()、progressMinimum()、progressMaximum()、progressText()、isStarted()、isFinished()、isRunning()、isCanceled()、isPaused()、waitForFinished()、result() 和 resultAt()。而 cancel()、setPaused()、pause()、resume() 和 togglePaused() 是 QFutureWatcher 中的槽函数。   
+状态更改由 started()、finished()、cancelled()、paused()、resumed()、resultReadyAt() 和 resultsReadyAt() 信号提供，进度信息由 progressRangeChanged()、progressValueChanged() 和progressTextChanged() 信号提供。   
+由函数setPendingResultsLimits()提供节流控制，当挂起的resultReadyAt()或resultsReadyAt()信号数量超过限制时，由future表示的计算将被自动节流，一旦挂起的信号数量下降到限制以下时，计算将恢复。   
+示例，开始计算并当完成时获取槽回调：   
+```
+//实例化对象，并且连接到finished()信号   
+MyClass myObject;
+QFutureWatcher<int> watcher;
+connect(&watcher, SIGNAL(finished()), &myObject, SLOT(handleFinished());   
+
+//开始计算   
+QFuture<int> future = QtConcurrent::run(...);
+watcher.setFuture(future);   
+```   
+[一去二三里的图片打开程序](https://blog.csdn.net/liang19890820/article/details/52935118 )给出了一个完整的并行示例，并且即时通过QFuture返回处理的内容。     
+**总体来说，QtConcurrent非常适合大量同性质的多线程任务的自动分配，提高效率大约在2.3倍左右。**    
+
+
+## QThread高阶应用    
+### 子类化QThread   
+定义一个WorkerTherad类，让其继承自QThread，并且重写run()函数，每隔50ms刷新当前的值，然后发射resultReady信号（用于更新进度条）。    
+```
+#include <QThread>
+
+class WorkerThread : public QThread
+{
+    Q_OBJECT
+
+public:
+    explicit WorkerThread(QObject *parent = 0)
+        : QThread(parent)
+    {
+        qDebug() << "Worker Thread : " << QThread::currentThreadId();
+    }
+
+protected:
+    virtual void run() Q_DECL_OVERRIDE {
+        qDebug() << "Worker Run Thread : " << QThread::currentThreadId();
+        int nValue = 0;
+        while (nValue < 100)
+        {
+            // 休眠50毫秒
+            msleep(50);
+            ++nValue;
+
+            // 准备更新
+            emit resultReady(nValue);
+        }
+    }
+signals:
+    void resultReady(int value);
+};
+```   
+主界面包含以下内容：   
+```
+class MainWindow : public CustomWindow
+{
+    Q_OBJECT
+
+public:
+    explicit MainWindow(QWidget *parent = 0)
+        : CustomWindow(parent)
+    {
+        qDebug() << "Main Thread : " << QThread::currentThreadId();
+
+        // 创建开始按钮、进度条
+        QPushButton *pStartButton = new QPushButton(this);
+        m_pProgressBar = new QProgressBar(this);
+
+        //设置文本、进度条取值范围
+        pStartButton->setText(QString::fromLocal8Bit("开始"));
+        m_pProgressBar->setFixedHeight(25);
+        m_pProgressBar->setRange(0, 100);
+        m_pProgressBar->setValue(0);
+
+        QVBoxLayout *pLayout = new QVBoxLayout();
+        pLayout->addWidget(pStartButton, 0, Qt::AlignHCenter);
+        pLayout->addWidget(m_pProgressBar);
+        pLayout->setSpacing(50);
+        pLayout->setContentsMargins(10, 10, 10, 10);
+        setLayout(pLayout);
+
+        // 连接信号槽
+        connect(pStartButton, SIGNAL(clicked(bool)), this, SLOT(startThread()));
+    }
+
+    ~MainWindow(){}
+
+private slots:
+    // 更新进度
+    void handleResults(int value)
+    {
+        qDebug() << "Handle Thread : " << QThread::currentThreadId();
+        m_pProgressBar->setValue(value);
+    }
+
+    // 开启线程
+    void startThread()
+    {
+        WorkerThread *workerThread = new WorkerThread(this);
+        connect(workerThread, SIGNAL(resultReady(int)), this, SLOT(handleResults(int)));
+        // 线程结束后，自动销毁
+        connect(workerThread, SIGNAL(finished()), workerThread, SLOT(deleteLater()));
+        workerThread->start();
+    }
+
+private:
+    QProgressBar *m_pProgressBar;
+    WorkerThread m_workerThread;
+};
+```   
+很显然，UI界面、Worker构造函数和槽函数同属于一个线程，而run()函数位于另一个线程。   
+> Main Thread : 0x34fc
+> Worker Thread : 0x34fc
+> Worker Run Thread : 0x4038
+> Handle Thread : 0x34fc   
+其中由于默认的连接方式，槽函数在接受者（主线程）执行。   
+### 线程休眠   
+QThread可以使用sleep进行所谓的休眠，但是还提供了一系列sleep()、msleep()、usleep()，允许分别以秒、毫秒和微妙来进行睡眠时间控制。有时候为了防止UI刷新太快，还会刻意在次线程加入休眠。   
+### 在主线程中更新UI   
+如果上述更新UI的槽改为Qt::DirectionConnection，就会报错，因为Qt只允许在主线程中对UI类部件进行操作。   
+### 避免多次connect    
+为了避免多次重复的connect，我们可以使用QThread::isRunning()方法检查是否在运行中，或者isFinished()来查询线程的状态。，并且将connect挪到构造函数中。   
+```
+class MainWindow : public CustomWindow
+{
+    Q_OBJECT
+
+public:
+    explicit MainWindow(QWidget *parent = 0)
+        : CustomWindow(parent)
+    {
+        // ...
+        connect(&m_workerThread, SIGNAL(resultReady(int)), this, SLOT(handleResults(int)));
+    }
+
+    ~MainWindow(){}
+
+private slots:
+    // ...
+    void startThread()
+    {
+        if (!m_workerThread.isRunning())
+            m_workerThread.start();
+    }
+
+private:
+    WorkerThread m_workerThread;
+};
+```   
+### 优雅的结束线程   
+如果一个主线程想要关闭次线程，往往会引起一些错误，例如如果关闭主界面时，次线程还在运行，就会出现以下提示：   
+>  QThread: Destroyed while thread is still running   
+这是因为次线程还在运行，就结束了UI主线程，导致了整个事件循环的结束。整个问题在使用线程过程中经常遇到，尤其耗时操作。   
+常见的一个方法是直接terminate()掉该线程，但是这个方法非常危险，正确的退出线程的一般思路：    
+1. 发出线程等待操作，调用quit()或者exit()。   
+2. 等待线程完全停止，删除创建在堆上的对象()。   
+3. 适当的使用wait()等待。   
+下面介绍两种方式：    
+QMutex互斥锁 + bool成员变量 
+这种方式是Qt4.x中常用的，主要是利用“QMutex互斥锁+bool成员变量”的方式来保证共享数据的安全性：    
+```
+#include <QThread>
+#include <QMutexLocker>
+
+class WorkerThread : public QThread
+{
+    Q_OBJECT
+
+public:
+    explicit WorkerThread(QObject *parent = 0)
+        : QThread(parent),
+          m_bStopped(false)
+    {
+        qDebug() << "Worker Thread : " << QThread::currentThreadId();
+    }
+
+    ~WorkerThread()
+    {
+        stop();
+        quit();
+        wait();
+    }
+
+    void stop()
+    {
+        qDebug() << "Worker Stop Thread : " << QThread::currentThreadId();
+        QMutexLocker locker(&m_mutex);
+        m_bStopped = true;
+    }
+
+protected:
+    virtual void run() Q_DECL_OVERRIDE {
+        qDebug() << "Worker Run Thread : " << QThread::currentThreadId();
+        int nValue = 0;
+        while (nValue < 100)
+        {
+            // 休眠50毫秒
+            msleep(50);
+            ++nValue;
+
+            // 准备更新
+            emit resultReady(nValue);
+
+            // 检测是否停止
+            {
+                QMutexLocker locker(&m_mutex);
+                if (m_bStopped)
+                    break;
+            }
+            // locker超出范围并释放互斥锁
+        }
+    }
+signals:
+    void resultReady(int value);
+
+private:
+    bool m_bStopped;
+    QMutex m_mutex;
+};
+```   
+为什么要加锁？是为了共享数据段的互斥。   
+何时需要加锁？在形成资源竞争时，也就是说，多个线程可能访问同一共享资源的时候。   
+   
+Qt5以后：requestInterruption() + isInterruptionRequested()   
+这两个接口是Qt5.x引入的，使用非常方便：    
+```
+class WorkerThread : public QThread
+{
+    Q_OBJECT
+
+public:
+    explicit WorkerThread(QObject *parent = 0)
+        : QThread(parent)
+    {
+    }
+
+    ~WorkerThread() {
+        // 请求终止
+        requestInterruption();
+        quit();
+        wait();
+    }
+
+protected:
+    virtual void run() Q_DECL_OVERRIDE {
+        // 是否请求终止
+        while (!isInterruptionRequested())
+        {
+            // 耗时操作
+        }
+    }
+};
+```      
+
+## Qt之线程同步（生产者消费者模式-QWaitCondition）   
+生产者将数据写入到缓冲区，直到它到达缓冲区的末尾，这时，它从开始位置重新启动，覆盖现有数据。消费者线程读取数据并将其写入标准错误。（？？？）   
+Wait Condition（等待条件）比单独使用mutex（互斥）有一个更高级的并发性，如果缓冲区的访问由一个QMutex把守，当生产者线程访问缓冲区的时候，消费者线程将会无法访问。然而，两个线程同时访问缓冲区的不同部分是没有坏处的。    
+示例包含两个类：Producer和Consumer，均继承QThread。循环缓冲区用于两个类之间的沟通，同步工具用于保护全局变量。    
+### 全局变量   
+首先是循环缓冲区和相关的同步工具：   
+```
+const int DataSize = 100000;
+
+const int BufferSize = 8192;
+char buffer[BufferSize];
+
+QWaitCondition bufferNoEmpty;
+QWaitCondition bufferNotFull;
+QMutex mutex;
+int numUsedBytes = 0;
+```    
+
+DataSize是生产者将生成的数据数量，为了尽可能的让示例简单，将其定义为一个常数。BufferSize是缓冲区的大小，小于DataSize，这意味着在某一时刻生产者将达到缓冲区的末尾，并从开始位重新启动。   
+要同步生产者和消费者，需要两个wait条件和一个mutex。当生产者生产了一些数据的时候，bufferNotEmpty条件被发射，告诉消费者可以读取它了；当消费者读取一些数据时，bufferNotFull条件发射，告诉生产者生成更多的数据。numUsedBytes为缓冲区中所包含数据的字节数。   
+总之，wait条件、mutex和numUsedBytes计数器确保生产者不会先于消费者超过BufferSize的大小，而消费者永远不会读取生产者尚未生成的数据。    
+总之，wait、mutex和numUsedBytes计数器确保生产者不会先于消费者超过BufferSize的大小，而消费者永远不会读取生产者尚未生成的数据。   
+### Producer   
+Producer类的代码如下：   
+```
+class Producer : public QThread
+{
+public:
+    Producer(QObject *parent = NULL) : QThread(parent)
+    {
+    }
+
+    void run() Q_DECL_OVERRIDE
+    {
+        qsrand(QTime(0,0,0).secsTo(QTime::currentTime()));
+
+        for (int i = 0; i < DataSize; ++i) {
+            mutex.lock();
+            if (numUsedBytes == BufferSize)
+                bufferNotFull.wait(&mutex);
+            mutex.unlock();
+
+            buffer[i % BufferSize] = "ACGT"[(int)qrand() % 4];
+
+            mutex.lock();
+            ++numUsedBytes;
+            bufferNotEmpty.wakeAll();
+            mutex.unlock();
+        }
+    }
+};
+```
+生产者生成了了DataSize字节的数据，在往循环缓冲区内写入一个字节之前，它必须先检测缓缓从曲是否已满(例如，numUsedBytes等于BufferSize),如果缓冲区满了，线程就会在bufferNotFull条件上等待。   
+最后，生产者增加numUsedBytes，并且标志bufferNotEmpty条件为true，从而numUsedBytes必然大于0；   
+我们使用一个mutex保护numUsedBytes变量的所有访问。此外，QWaitCondition::wait()函数接受一个mutex作为其参数，**当线程被置于休眠状态之前，该mutex被解锁；当线程被唤醒，该mutex被锁定；**此外，为了防止竞争条件发生，从锁定状态到等待状态的过渡具有原子性。   
+### Consumer   
+现在转向Consumer类：    
+```
+class Consumer : public QThread
+{
+    Q_OBJECT
+public:
+    Consumer(QObject *parent = NULL) : QThread(parent)
+    {
+    }
+
+    void run() Q_DECL_OVERRIDE
+    {
+        for (int i = 0; i < DataSize; ++i) {
+            mutex.lock();
+            if (numUsedBytes == 0)
+                bufferNotEmpty.wait(&mutex);
+            mutex.unlock();
+
+            fprintf(stderr, "%c", buffer[i % BufferSize]);
+
+            mutex.lock();
+            --numUsedBytes;
+            bufferNotFull.wakeAll();
+            mutex.unlock();
+        }
+        fprintf(stderr, "\n");
+    }
+
+signals:
+    void stringConsumed(const QString &text);
+};
+```   
+代码非常类似于生产者，在读取字节之前，需要先检查缓冲区是否为空(numberBytes为0)，而非它是否已满。并且，当它为空时，需要等待bnufferNotEmpty条件。在读取字节以后，减小numUsedBytes(而非增加)，并且标志bufferNotFull条件（并非bufferNotEmpty条件）；   
+### main()函数   
+在main()函数中，我们创建了两个线程，并且调用了QThread::wait()方法，确保在退出前，这两个线程有时间完成。 （wait函数是用于等待该命令是否执行完，可以赋予一个参数指明等待时间，如果到了等待时间还没返回finished()信号，那么就会返回false）    
+```
+int main(int argc, char *argv[])
+{
+    QCoreApplication app(argc, argv);
+    Producer producer;
+    Consumer consumer;
+    producer.start();
+    consumer.start();
+    producer.wait();
+    consumer.wait();
+    return 0;
+}
+```
+当运行这个程序，会发生什么？    
+最初，生产者是唯一一个可以做任何事情的线程，消费者阻塞并等待bufferNotEmpty条件被发射(numUsedBytes是0)。一旦生产者把一个字节放入缓冲区，numUsedBytes就会变成BufferSize-1，并且bufferNotEmptytiaojian 被发射。这时，可能发生两件事：要么消费者线程接管和读取字节，要么生产者开始生成第二个字节。     
+此示例中提出的“生产者-消费者”模式，适用于编写高并发多线程应用，在多处理器的计算机中，程序可能比基于mutex的方案快达两倍至多，因为两个线程可以同一时间在缓冲区的不同部分处于激活的状态。   
+但是要知道，这些好处并不能总是实现，例如对一个QMutex加锁和解锁都是需要时间成本的。在实践中，可能需要把缓冲区区分为块，并且针对块进行操作而非单个字节。缓冲区的大小也是一个值得选择的参数，需要基于实践进行选择。   
+
+## Qt之线程同步（生产者消费者模式-QSemaphore）   
+其余情况和上一章相同，仍然使用相同的全局变量。   
+### 全局变量   
+```
+const int DataSize = 100000;
+
+const int BufferSize = 8192;
+char buffer[BufferSize];
+
+QSemaphore freeBytes(BufferSize);
+QSemaphore usedBytes;
+```    
+信号量模式中，要同步生产者和消费者，需要两个信号量。freeBytes信号量用于控制缓冲区中的"free"区域（生产者尚未填充，或者消费者已经读取过的区域）, usedBytes信号量用于控制缓冲区的"used"区域（生产者已经填充，但是消费者上为读取的区域）。    
+总之，这些信号量会确保生产者不会先于消费者超过BufferSize的大小，而消费者永远不会读取生产者尚未生成的数据。   
+freeBytes信号量用BufferSize来初始化，因为整个缓冲区是空的。usedBytes信号量初始化为0（默认值）。   
+### Producer    
+Producer类的代码如下：   
+```
+class Producer : public QThread
+{
+public:
+    void run() Q_DECL_OVERRIDE
+    {
+        qsrand(QTime(0,0,0).secsTo(QTime::currentTime()));
+        for (int i = 0; i < DataSize; ++i) {
+            freeBytes.acquire();
+            buffer[i % BufferSize] = "ACGT"[(int)qrand() % 4];
+            usedBytes.release();
+        }
+    }
+};
 ```
