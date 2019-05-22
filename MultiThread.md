@@ -514,4 +514,260 @@ QImage scaledToWidth(const QImage &image)
 ```
 QList<QImage> iamges =...;
 QFuture<QImage> thumbnails = QtConcurrent::mapped(images, std::bind(&QImage::scaledToWidth, 100, Qt::Transformation));
+```   
+
+
+## Qt Concurrent Filter和Filter-reduce   
+其用法和map类似，同样具有filter()、filtered()和filteredReduced()三个函数，不过都是对一个序列中的内容进行过滤；   
+
+## Qt Concurrent Run  
+QtConcurrent::run()函数在一个单独的线程中运行一个函数，函数的返回值通过QFutureAPI提供。   
+### 在单独的线程中运行函数   
+```
+extern void aFunction();
+QFuture<void> future = QtConcurrent::run(aFunction);
+```   
+这将在从默认的QThreadPool获取的单独的线程中运行aFunction，可以使用QFuture和QFutureWathcer监控函数的状态；   
+如果要使用专门的线程池，可以传递QThreadPool作为第一个参数： 
+```  
+extern void aFunction();
+QThreadPool pool;
+QFuture<void> future = QtConcurrent::run(&pool, aFunction);
+```   
+### 将参数传递给函数   
+将参数传递给函数，是通过将它们添加到QtConcurrent::run()直接调用在函数名之后（类似于arg），例如： 
+```
+extern void aFunctionWithArguments(int arg1, double arg2, const QString &string);
+int integer;
+double floatingPoint;
+QString string;
+
+QFuture<void> future = QtConcurrent::run(aFunctionWithArguments, integer, floatingPoint, string);
+```   
+每个参数的副本在调用QtConcurrent::run()的时候产生，而当函数开始执行时，这些值被传递给线程。**调用QtConcurrent::run()后对参数所做的更改对于线程来说不可见。**   
+### 从函数返回值   
+该函数的任何返回值都可以通过QFuture可见：   
+```
+extern QString functionReturningAString();
+QFuture<QString> future = QtConcurrent::run(functionReturningAString);    
+...
+QString result = future.result();
+```   
+传递参数和上文所述一样：   
+```
+extern QString someFunction(const QByteArray &input);
+
+QByteArray bytearray = ...;
+
+QFuture<QString> future = QtConcurrent::run(someFunction, bytearray);
+...
+QString result = future.result();
+```   
+Tip: QFuture::result()函数阻塞并且等待通知结果可用，当函数执行完成并且结果可用时，使用QFutureWatcher获取通知。   
+
+### 附加API功能   
+### 使用成员函数   
+类似map三人组，run()也接受指向成员函数的指针，第一个参数必须是const引用或者指向类的实例的指针。在调用const成员函数的时候，const引用的传递是很有用的，传递指针对于调用修改实例的非const成员非常有用。 (简单来说就是通过引用和指针来区分是常成员函数还是非常成员函数)     
+例如，在单独的线程中调用QByteArray::split()(一个const成员函数)是这样做的：   
+```
+// 在一个单独的线程中调用 QList<QByteArray> QByteArray::split(char sep) const
+QByteArray bytearray = "hello world";
+QFuture<QList<QByteArray> > future = QtConcurrent::run(bytearray, &QByteArray::split, ',');
+...
+QList<QByteArray> result = future.result();
+```   
+调用非const成员函数是这样：   
+```
+// 在一个单独的线程中调用 void QImage::invertPixels(InvertMode mode) 
+QImage image = ...;
+QFuture<void> future = QtConcurrent::run(&image, &QImage::invertPixels, QImage::InvertRgba);
+...
+future.waitForFinished();
+// 此时，image 中的像素已经被反转
+```      
+### 使用绑定函数参数   
+在调用时，可以使用std::bind()将一些参数绑定到函数，如果C++11不可用，boost::bind()或者std::tr1::bind()是合适的替代品。   
+有许多需要绑定的原因：    
+- 调用需要超过5个参数的函数；   
+- 简化使用常量参数调用函数；   
+- 更改参数的顺序。   
+调用绑定函数是这样：   
+```
+void someFunction(int arg1, double arg2);
+QFuture<void> future = QtConcurrent::run(std::bind(someFunction, 1, 2.0));
+```   
+
+
+## QFuture
+QFuture代表一个异步计算的结果，它允许线程与一个或者多个结果同步，而这些结果将在稍后的事件点准备就绪，该结果可以是具有默认构造函数和拷贝构造函数的任何类型。如果一个结果在调用result()、resultAt()或者results()函数不可用的时候，QFuture将进行等待，直到结果可用位置，使用isResultReadyAt()函数可以检测结果是否已经准备就绪；   
+进度信息由progressValue()、progressMinimum()、progressMaximun()和progressText()函数提供。   
+### 基本使用   
+```
+#include <QCoreApplication>
+#include <QtConcurrent/QtConcurrentRun>
+#include <QDebug>
+
+void hello(const QString &name)
+{
+    qDebug() << "Hello" << name << "from" << QThread::currentThread();
+}
+
+int main(int argc, char *argv[])
+{
+    QCoreApplication a(argc, argv);
+
+    qDebug() << "Main Thread" << QThread::currentThread();
+
+    // 在一个单独的线程中调用 hello()
+    QFuture<void> f1 = QtConcurrent::run(hello, QString("Qter"));
+    QFuture<void> f2 = QtConcurrent::run(hello, QString("Pythoner"));
+
+    // 阻塞调用线程并等待计算完成，确保所有结果可用
+    f1.waitForFinished();
+    f2.waitForFinished();
+}
+```   
+输出结果如下所示：   
+```
+Main Thread QThread(0x398fc0)
+Hello “Qter” from QThread(0x39c240, name = “Thread (pooled)”)
+Hello “Pythoner” from QThread(0x39c280, name = “Thread (pooled)”)
+```   
+显然，主线程和另外两个线程均不同。   
+QFuture<void>专用于获取不包含任何结果的函数，任何QFuture<T>都可以分配或者复制到QFuture<void>。如果只需要获得状态或者进度信息，而不需要实际结果数据，就一般采用这样的方法。   
+### 高级操作   
+QFuture最亮眼的，是它提供了一些列与正在进行的异步调用进行交互，例如使用cancel()函数取消计算；要暂停计算，使用setPaused()函数或者pause()、resume()、toogglePaused()函数之一。   
+助手中有一句很关键的话：    
+```
+Be aware that not all asynchronous computations can be canceled or paused. For example, the future returned by QtConcurrent::run() cannot be canceled; but the future returned by QtConcurrent::mappedReduced() can
+```   
+意思说是并非所有的异步计算都可以被取消，例如QtConcurrent::run()返回的future不能被取消，但是QtConcurrent::mappedReduced()返回的可以。   
+来看一组对于图像缩放的示例：   
+```
+#include <QImage>
+#include <QDebug>
+#include <QGuiApplication>
+#include <QtConcurrent/QtConcurrentMap>
+
+QImage scale(const QImage &image)
+{
+    qDebug() << "Scaling image in thread" << QThread::currentThread();
+    return image.scaled(QSize(100, 100), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+}
+
+int main(int argc, char *argv[])
+{
+    QGuiApplication app(argc, argv);
+
+    const int imageCount = 20;
+
+    // 创建一个列表包含 imageCount 个图像
+    QList<QImage> images;
+    for (int i = 0; i < imageCount; ++i)
+        images.append(QImage(1600, 1200, QImage::Format_ARGB32_Premultiplied));
+
+    // 使用 QtConcurrent::mapped 对每个图像应用 scale 函数（缩放）
+    QFuture<QImage> thumbnails = QtConcurrent::mapped(images, scale);
+
+    // 暂停计算
+    thumbnails.pause();
+    qDebug() << "isPaused" << thumbnails.isPaused();
+
+    // 恢复计算
+    if(thumbnails.isPaused()) {
+        thumbnails.resume();
+        qDebug() << "isStarted" << thumbnails.isPaused();
+    }
+
+    // 阻塞调用线程并等待计算完成，确保所有结果可用
+    thumbnails.waitForFinished();
+
+    // 返回 future 的所有结果
+    QList<QImage> list = thumbnails.results();
+    foreach (QImage image, list) {
+        qDebug() << image;
+    }
+
+    qDebug() << "********************";
+
+    // 返回 future 的结果数
+    int nCount = thumbnails.resultCount();
+    for (int i = 0; i < nCount; ++i) {
+        QImage image = thumbnails.resultAt(i);
+        qDebug() << image;
+    }
+
+    return 0;
+}
+```   
+为了演示效果，调用了mapped()之后，使用pause()暂停计算，然后通过isPaused()来查询QFuture表示的状态。状态可以通过isCanceled()、isStarted()、isFinished()、isRunning()或者isPaused()函数来查询。   
+Tip: 即使isPaused()返回为true,计算仍然可能在运行中。   
+要访问future中的结果，可以使用索引位置，一些QFuture的成员函数将索引作为它们的第一个参数，例如resultAt()，使得其可以在不使用迭代器的情况下访问。   
+对于拥有多个结果的QFuture对象，resultCount()函数返回连续结果的数量，这意味着从0到resultCount()的结果始终是安全的。   
+### 迭代器   
+QFuture提供了一个Java风格迭代器(QFutureIterator)和一个stl风格迭代器(QFuture::const_iterator):   
+- Java风格迭代器：高级易于使用，但是效率略低；   
+- STL风格迭代器：低级，实用麻烦，但是效率高；   
+使用这两种迭代器是访问QFuture对象中的另一种方法。   
+### QFutureIterator   
+QFutureIterator为QFuture提供了一个Java风格的const迭代器。   
+QFutureIterator<T>允许遍历QFuture<T>，其构造函数使用QFuture作为其参数，构造后就位于列表的开始端，如下：    
+```
+QFuture<QString> future;
+...
+QFutureIterator<QString> i(future);
+while (i.hasNext())
+    qDebug() << i.next();
+```
+Tip:next()函数从future返回下一个结果（如果需要，要等它变得可用）并且推进迭代器——注意，和C++风格迭代器完全不同的是，Java风格的迭代器指向结果之间，而不是直接指向结果，例如第一次调用next()将迭代器推进到结果1和结果2之间，但是返回第一个结果；   
+![Java风格迭代器示意图](https://img-blog.csdn.net/20161025171723591 )
+反向的迭代顺序同理：   
+```
+QFutureIterator<QString> i(future);
+i.toBack();
+while (i.hasPrevious())
+    qDebug() << i.previous();
+```    
+如果需要查找特定的所有值，可以在循环中使用findNext()或者findPrevious()。   
+可以在同一个future中使用多个迭代器，如果future在QFutureIterator处于活动状态时被修改，QFutureIterator将继续迭代原始的future，忽略修改的副本。   
+### QFuture::const_iterator   
+QFuture::const_iterator类为QFuture提供了一个STL风格的const迭代器。   
+默认的QFuture::const_iterator构造函数会创建一个未初始化的迭代器，在开始迭代以前，必须使用QFuture::constBegin()或者QFuture::constEnd()等QFuture函数进行初始化；   
+```
+QFuture<QString> future = ...;
+
+QFuture<QString>::const_iterator i;
+for (i = future.constBegin(); i != future.constEnd(); ++i)
+    cout << *i << endl;
+```
+
+## Qt之QFutureWatcher   
+QFuture表示异步计算的结果，而QFutureWatcher则允许使用信号和槽监视QFuture，也就是说QFutureWatcher是为QFuture而生的。    
+### 详细描述    
+QFutureWatcher提供了有关QFuture的信息和通知，通过setFuture()函数来监视一个特定的QFuture，函数future()则返回由setFuture()设置的future。   
+为了方便，QFuture的很多函数可以直接通过QFutureWatcher来进行访问，例如： progressValue()、progressMinimum()、progressMaximum()、progressText()、isStarted()、isFinished()、isRunning()、isCanceled()、isPaused()、waitForFinished()、result() 和 resultAt()。而 cancel()、setPaused()、pause()、resume() 和 togglePaused() 是 QFutureWatcher 中的槽函数。   
+状态更改由 started()、finished()、cancelled()、paused()、resumed()、resultReadyAt() 和 resultsReadyAt() 信号提供，进度信息由 progressRangeChanged()、progressValueChanged() 和progressTextChanged() 信号提供。   
+由函数setPendingResultsLimits()提供节流控制，当挂起的resultReadyAt()或resultsReadyAt()信号数量超过限制时，由future表示的计算将被自动节流，一旦挂起的信号数量下降到限制以下时，计算将恢复。   
+示例，开始计算并当完成时获取槽回调：   
+```
+//实例化对象，并且连接到finished()信号   
+MyClass myObject;
+QFutureWatcher<int> watcher;
+connect(&watcher, SIGNAL(finished()), &myObject, SLOT(handleFinished());   
+
+//开始计算   
+QFuture<int> future = QtConcurrent::run(...);
+watcher.setFuture(future);   
+```   
+[一去二三里的图片打开程序](https://blog.csdn.net/liang19890820/article/details/52935118 )给出了一个完整的并行示例，并且即时通过QFuture返回处理的内容。     
+**总体来说，QtConcurrent非常适合大量同性质的多线程任务的自动分配，提高效率大约在2.3倍左右。**    
+
+
+## QThread高阶应用    
+### 子类化QThread   
+定义一个WorkerTherad类，让其继承自QThread，并且重写run()函数，每隔50ms刷新当前的值，然后发射resultReady信号（用于更新进度条）。    
+```
+#include <QThread>
+
+
 ```
