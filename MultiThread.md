@@ -769,6 +769,7 @@ watcher.setFuture(future);
 ```
 #include <QThread>
 
+<<<<<<< HEAD
 class WorkerThread : public QThread
 {
     Q_OBJECT
