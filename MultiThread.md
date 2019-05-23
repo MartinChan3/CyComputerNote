@@ -425,7 +425,7 @@ QFuture<QImage> collage = QtConcurret::mappedReduced(images, scaled, addToCollag
 对于map函数返回的结果，reduce函数将会被调用一次，并且应该讲中间体合并到结果变量中。QtConcurrent::mappedReduced()保证一次只有一个线程调用reduce，所以没必要用一个mutex锁定结果变量。   
 有一个很有意思的参数是QtConcurrent::ReduceOptions枚举量提供了一个控制reduction完成的顺序，如果使用QtConcurrent::UnorderedReduced(默认)，则执行顺序是不确定的。而QtConcurrent::OrderedReduce确保reduction按照原始序列的顺序完成；   
 
-## 附加API功能   
+### 附加API功能   
 ### 使用迭代器而不是序列
 上述每个函数都有一个变量，需要一个迭代器范围，而不是一个序列： 
 ```
@@ -769,6 +769,7 @@ watcher.setFuture(future);
 ```
 #include <QThread>
 
+<<<<<<< HEAD
 class WorkerThread : public QThread
 {
     Q_OBJECT
@@ -1140,4 +1141,45 @@ public:
         }
     }
 };
+```     
+生产者生成了DataSize字节的数据，在往循环缓冲区写入一个字节之前，必须使用freeBytes信号量来获取一个"free"字节。如果消费者没有与生产者保持着同样的速度，QSemaphore::acquire()调用可能会阻塞。   
+最后，生产者使用usedBytes信号释放一个字节，该“free”字节已经成功转化为一个"used"字节，准备好供消费者进行读取。   
+### Consumer   
 ```
+class Consumer : public QThread
+{
+    Q_OBJECT
+public:
+    void run() Q_DECL_OVERRIDE
+    {
+        for (int i = 0; i < DataSize; ++i) {
+            usedBytes.acquire();
+            fprintf(stderr, "%c", buffer[i % BufferSize]);
+            freeBytes.release();
+        }
+        fprintf(stderr, "\n");
+    }
+
+signals:
+    void stringConsumed(const QString &text);
+
+protected:
+    bool finish;
+};
+```   
+Consumer和Producer流程正好相反，获得一个used字节并且释放一个free字节。   
+### main函数  
+```
+int main(int argc, char *argv[])
+{
+    QCoreApplication app(argc, argv);
+    Producer producer;
+    Consumer consumer;
+    producer.start();
+    consumer.start();
+    producer.wait();
+    consumer.wait();
+    return 0;
+}
+```   
+最初，生产者是唯一一个可以做任何事情的线程，消费者阻塞并等待usedBytes信号量释放(available()初始数为0)。一旦生产者把一个字节放入缓冲区，freeBytes.available()就会变为BufferSize - 1,并且usedBytes.available()变为1。这时候可能发生两件事，要么消费者线程接管和读取字节，要么生产者开始生产第二个字节。   
