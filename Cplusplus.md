@@ -733,4 +733,238 @@ pointSize指的是实际的肉眼字体大小，与显示器无关
 
 105. 所以do {} while(0)的使用时为了保证宏定义的使用者能无编译错误的用宏。[csdn](https://blog.csdn.net/weibo1230123/article/details/81904498 )  （简单来说不需要加后缀） 
 
-106. QtConcurrent采取了容器处理的方法，会自动分配核心对函数进行处理，这意味着是否非常合适进行类似utk图片输出的情况？（并发式）
+106. QtConcurrent采取了容器处理的方法，会自动分配核心对函数进行处理，这意味着是否非常合适进行类似utk图片输出的情况？（并发式）    
+
+107. Qt事件循环：    
+Qt是基于事件驱动的框架，事件和事件传递在其中非常重要。   
+事件能够程序内部和外部产生，举个例子：   
+- QKeyEvent和QMouseEvent对象代表了一个键盘和鼠标事件，它们从窗口由用户的操作而产生。   
+- QTimerEvent对象是当某个事件被激发时投入，它们由操作系统产生。   
+- QChildEvent对象是当一个子窗口被添加或者移除时被送入QObject的，它们的源头是Q他程序自己。   
+事件的重点是它们产生的时候并不会被直接传递，而是会先进入事件队列，某时刻会被传递。传送者自己循环事件队列并且把事件传递给目标的QObject对象，因此被称作为事件循环。概念上说，时间循环就像这个：   
+```
+while (is_active)
+{
+    while (!event_queue_is_empty)
+        dispatch_next_event();
+    
+    wait_for_more_events();
+}
+```   
+我们通过运行QCoreApplication::exec()来进入消息循环，直到这个循环调用了exit()或者quit()被调用时才会被堵塞，然后退出。   
+这个“wait_for_more_events()”函数处于堵塞的状态，直到有新的事件被产生。假如我们考虑它，所有在此刻可能产生的事件是外部源头的，那么这个消息循环在以下情况会被唤醒：   
+- 窗口管理活动（鼠标按键操作等）；   
+- 套接字事件；   
+- 定时器事件；   
+- 其他线程中投递的事件；    
+在Unix-like系统中，窗口管理器通过套接字来通知应用程序，即使客户端使用它们来与x server通讯，如果我们决定用内部的套接字去实现跨线程的事件投递，只剩下以下唤醒条件：   
+- 套接字；   
+- 定时器；   
+这个就是select(2)系统调用所做的，它监视着一系列活动者的描述符，如果它们在一定的时间内没有特定的活动，它最终就超时了。   
+一个运行着的事件循环需要什么？    
+这个不是完整的列表，但是如果有整体的画面，你将能够去猜测什么类需要一个运行着的事件循环。   
+- Widgets的绘画和互动：QWidget::paintEvent()将在传递QPaintEvent对象时被调用，这个对象将会在调用QWidgets::update()或者窗口管理器的时候产生：响应的事件需要一个事件循环去进行分发。   
+- Timers: 长话短说，当它们在select(2)或者超时的时候产生，因此它们需要让Qt在返回时间循环的时候进行这些调用。    
+- Networking:所有底层Qt网络类（QTcpSocket、QUdpSocket、QTcpServer等）这些都是异步设计的，当你调用了ready()，它们只是返回已经可用的数据，当你调用write()，它们只是将这个操作放入队列，适时的时候会写入。只有当你返回消息循环的时候才是真实的读写速度，写入才会执行。注意它们的确提供了同步的方法，但是它们的用法是不被提倡的，因为它们会堵塞事件循环。QNetworkAccessManager，不再简单的提供一个API，而是需要一个事件循环。   
+### 堵塞事件循环法     
+在我们讨论为什么你从不堵塞消息循环之前，我们试着分析堵塞的含义。加入你有一个按钮，它会在被点击的时候发出clicked信号；在我们的对象中连接着一个槽函数，当你点击了那个按钮后，栈追踪会像这样：   
+```
+main(int, char**)
+QApplication::exec()
+[...]
+QWidget::event(QEvnet*)
+Button::mousePressEvent(QMousePressEvent*)
+Button::clicked()
+[...]
+Worker::doWork()
+```   
+**在main函数中我们启动了时间循环，像往常一样调用了exec()。窗口管理器给我们发送了一个鼠标点击事件，它被Qt内核取走，转换为QMouseEvent并被我们送往widget的event()方法，该方法被QApplication::notify()发送。因为按钮没有重写event()，基类的方法将会被调用，QWidget::event()检测到这个事件的确是一个鼠标点击事件，然后调用特定的事件处理函数，那就是Button::mousePressEvent()，我们重写这个方法去发送clicked()信号，那就会调用被连接的槽函数。**     
+当该对象处理量很大，那么消息循环在做什么？我们猜测它：什么都不会做！它分发鼠标按下事件，然后就堵塞着等待事件处理函数返。这个就是堵塞了时间循环，它意味着没有消息被分发了，知道我们从槽函数返回了，然后继续处理挂起的信息。   
+在消息循环被卡住的情况下，widgets将不能进行自身的更新，不能有更多的互动,timers将不会被激发，网络通讯将会缓慢下来，或者停止。进一步的说，许多窗口管理器将会检测到你的应用程序不再处理事件了，然后告诉用户你的程序没有响应，这就是为什么快速的对事件响应并且即使返回到事件循环是多么的重要。   
+### 强制事件分发   
+所以，如果我们有一个很长的任务去运行但是又不希望这个消息循环被堵塞，应该如何处理？一个可能的方法是将这个任务移到另一个线程中。当然，我们也能手动强制事件循环去运行，这个方法是通过在堵塞的任务函数中去调用**QCoreApplication::processEvent()**来实现的，QCoreApplication::processEvent()将处理所有在消息队列中的消息并返回给调用者。    
+另一个可选的选项是我们可以强制重入事件循环的对象，就是QEventLoop类，当通过调用QEventLoop::exec()我们将重入事件循环，然后我们就能将槽函数QEventLoop::quit()连接到信号上去使它退出。举个例子：   
+```
+QNetworkAccessManager qnam;
+QNetworkReply *reply = qnam.get(QNetworkRequeset(QUrl(...));
+QEventLoop loop;
+QObject::connect(reply, SIGNAL(finished()), &loop, SLOT(quit()));
+loop.exec();
+//到这一步时，reply已经全部完成，使用即可   
+```
+QNetworkReply本身不提供堵塞的API，它要求一个在运行的事件循环，我们进入了一个本地的事件循环，当回复完成的手，这个本地的循环退出了。    
+要特别小心的是其他路径下重入事件循环：它极可能导致出现不应该出现的递归。让我们回到前面看看按钮的例子。假如我们在槽函数中调用了QCoreApplication::processEvent(),当用户点击了这个按钮，这个槽函数将被再次调用：    
+```
+main(int,char**)
+QApplication::exec()
+[...]
+QWidget::event(QEvent*)
+Button::mousePressEvent(QMouseEvent*)
+Button::clicked()   
+[...]
+Worker::doWork() //首先，内部调用   
+QCoreApplication::processEvent() //手动分发事件   
+[...]
+QWidget::event(QEvent*) //此刻另一个鼠标点击事件进入了   
+Button::mousePressEvent(QMouseEvent*)   
+Button::clicked() //此时clicked()信号再次发送   
+[...]
+Worker::doWork() //GG!此时我们在槽函数中递归了   
+```   
+一个比较方便的方法是把QEventLoop::ExcludeUserInputEvent传递给QCoreApplication::processEvents(),这会告诉消息循环不要再次分发任何用户的输入事件。   
+幸运的是，在检测事件中，这个相同的事件不会被发生。事实上，它们被Qt通过特殊的方法处理了，只有当运行的事件循环有了一个比deleteLater被调用后更小的“nesting”值才会被处理：   
+```
+QObject *object = new QObject;
+object->deleteLater();
+QDialgo dialog;
+dialog.exec();   
+```
+将不会使得object成为一个悬空指针，相同的东西被应用到了本地的事件循环中。唯一的一个显著区别是，它在加入没有当前事件循环在运行的时候deleteLater被调用了的条件下，然后第一个消息循环进入后会取走这个事件，然后立即删除这个Object，这个是相当合理的，因为Qt不知道任何外部的循环会最终影响这个检测，因此马上删除了这个object。    
+   
+108. postEvent()和sendEvent()的源码分析：   
+Qt文档中这样解释：   
+sendEvent(QObject* receiver, QEvent *event)
+使用notify()函数直接给receiver发送事件。   
+postEvent(QObject* receiver, QEvent *event)
+向事件队列中添加receiver和event。     
+简单说，sendEvent是同步事件处理，postEvent是异步事件处理。   
+### sendEvent代码分析   
+```
+inline bool QCoreApplication::sendEvent(QObject *receiver, QEvent *event)  
+{  if (event) event->spont = false; return self ? self->notifyInternal(receiver, event) : false; }  
+```   
+直接调用notifyInternal接口，注意中间设置自发标志位为false，同时还需要判断self是否有效(QCoreApplication是否启动)。   
+```
+bool QCoreApplication::notifyInternal(QObject *receiver, QEvent *event)  
+{  
+    // Make it possible for Qt Jambi and QSA to hook into events even  
+    // though QApplication is subclassed...  
+    bool result = false;  
+    void *cbdata[] = { receiver, event, &result };  
+    if (QInternal::activateCallbacks(QInternal::EventNotifyCallback, cbdata)) {  
+        return result;  
+    }  
+      
+    // Qt enforces the rule that events can only be sent to objects in  
+    // the current thread, so receiver->d_func()->threadData is  
+    // equivalent to QThreadData::current(), just without the function  
+    // call overhead.  
+    QObjectPrivate *d = receiver->d_func();  
+    QThreadData *threadData = d->threadData;  
+    ++threadData->loopLevel;  
+      
+    bool returnValue = notify(receiver, event);  
+    --threadData->loopLevel;  
+     return returnValue;  
+}  
+```   
+notifyInternal最重要的作用是activeCallbacks,直接看notify:   
+```
+bool QCoreApplication::notify(QObject *receiver, QEvent *event)
+{  
+    Q_D(QCoreApplication);  
+    // no events are delivered after ~QCoreApplication() has started  
+    if (QCoreApplicationPrivate::is_app_closing)  
+        return true;  
+    if (receiver == 0) {                        // serious error  
+        qWarning("QCoreApplication::notify: Unexpected null receiver");  
+        return true;  
+    }  
+    return receiver->isWidgetType() ? false : d->notify_helper(receiver, event);  
+}  
+```   
+这个接口在Qt文档上有注释，注意其中当receiver为控件时，不进行处理。   
+```
+bool QCoreApplicationPrivate::notify_helper(QObject *receiver, QEvent * event)  
+{  
+    // send to all application event filters  
+    if (sendThroughApplicationEventFilters(receiver, event))  
+        return true;  
+    // send to all receiver event filters  
+    if (sendThroughObjectEventFilters(receiver, event))  
+        return true;  
+    // deliver the event  
+    return receiver->event(event);  
+}  
+```    
+在这里可以看到事件是如何被处理的：   
+**
+- 先送入Application事件过滤器，看看是否在事件过滤器中处理；   
+- 再看看receiver是否有此事件的过滤器；   
+- 最后，将事件送入receiver的event接口；   
+**   
+从整个过程来看，可以认为是sendEvent直接调用了receiver的event接口，可以认为处理方式是同步处理方式。   
+### postEvent分析   
+```
+void QCoreApplication::postEvent(QObject *receiver, QEvent *event)  
+{  
+    postEvent(receiver, event, Qt::NormalEventPriority);  
+}  
+```   
+
+```
+void QCoreApplication::postEvent(QObject *receiver, QEvent *event, int priority)  
+{  
+    ...  
+    QThreadData * volatile * pdata = &receiver->d_func()->threadData;  //得到线程信息  
+    QThreadData *data = *pdata;  
+    if (!data) {  
+        // posting during destruction? just delete the event to prevent a leak  
+        delete event;  
+        return;  
+    }  
+    
+    // lock the post event mutex  
+    data->postEventList.mutex.lock();  
+    
+    // if object has moved to another thread, follow it  
+    while (data != *pdata) {                 //在这里判断receiver线程信息是否发生变化。（有可能是另外一个线程调用用receiver->moveToThread）
+        data->postEventList.mutex.unlock();  
+    
+        data = *pdata;  
+        if (!data) {  
+            // posting during destruction? just delete the event to prevent a leak  
+            delete event;  
+            return;  
+        }  
+    
+        data->postEventList.mutex.lock();  
+    }  
+    //这里postEventList还是被锁着的。  
+    // if this is one of the compressible events, do compression  
+    if (receiver->d_func()->postedEvents  
+        && self && self->compressEvent(event, receiver, &data->postEventList)) {  
+        data->postEventList.mutex.unlock();//这个事件有可能被压缩（实际上是发现队列中有这个事件还没有被处理，且这个事件是可以被压缩的，例如paintevent）  
+        return;  
+    }  
+    
+    event->posted = true;  
+    ++receiver->d_func()->postedEvents;  
+    if (event->type() == QEvent::DeferredDelete && data == QThreadData::current()) {  
+        // remember the current running eventloop for DeferredDelete  
+        // events posted in the receiver's thread  
+        event->d = reinterpret_cast<QEventPrivate *>(quintptr(data->loopLevel)); //receiver即将被析构？  
+    }  
+    //将事件添加到postEventList中，注意这里的优先级第一个最高，最后一个优先级最低  
+    if (data->postEventList.isEmpty() || data->postEventList.last().priority >= priority) {  
+        // optimization: we can simply append if the last event in  
+        // the queue has higher or equal priority  
+        data->postEventList.append(QPostEvent(receiver, event, priority));  
+    } else {  
+        // insert event in descending priority order, using upper  
+        // bound for a given priority (to ensure proper ordering  
+        // of events with the same priority)  
+        QPostEventList::iterator begin = data->postEventList.begin()  
+                                            + data->postEventList.insertionOffset,  
+                                    end = data->postEventList.end();  
+        QPostEventList::iterator at = qUpperBound(begin, end, priority);  
+        data->postEventList.insert(at, QPostEvent(receiver, event, priority));  
+    }  
+    data->canWait = false;  
+    data->postEventList.mutex.unlock();//在这里解除锁  
+    //receiver所在的线程调用eventDispatcher处理postEventList  
+    if (data->eventDispatcher)  
+        data->eventDispatcher->wakeUp();  
+}  
+```   
+从上面可以看到，postEvent实际上是将事件添加到receiver所在线程的一个队列中，至于整个队列所在的线程什么时候处理这个事件，postEvent是无法处理的。   
