@@ -1183,4 +1183,5 @@ int main(int argc, char *argv[])
     return 0;
 }
 ```   
+<<<<<<< HEAD
 最初，生产者是唯一一个可以做任何事情的线程，消费者阻塞并等待usedBytes信号量释放(available()初始数为0)。一旦生产者把一个字节放入缓冲区，freeBytes.available()就会变为BufferSize - 1,并且usedBytes.available()变为1。这时候可能发生两件事，要么消费者线程接管和读取字节，要么生产者开始生产第二个字节。    
