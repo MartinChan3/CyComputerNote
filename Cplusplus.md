@@ -968,3 +968,6 @@ void QCoreApplication::postEvent(QObject *receiver, QEvent *event, int priority)
 }  
 ```   
 从上面可以看到，postEvent实际上是将事件添加到receiver所在线程的一个队列中，至于整个队列所在的线程什么时候处理这个事件，postEvent是无法处理的。   
+
+109. Qt提供了QSqlRelationTableModel来实现所谓的外键功能。类似你在表格属性中写入0514，它会自动给你转化为扬州。      
+外键： 一个表中的属性和另一个表中主键属性的映射功能。
