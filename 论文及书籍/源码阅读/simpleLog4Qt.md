@@ -40,8 +40,10 @@ void SimpleQtLogger::log(const QString& text, LogLevel logLevel, const QString& 
   emit signalLog(timeStamp(), threadId(), text, logLevel, functionName, fileName, lineNumber);
 }
 ```   
-注意此处特地强调**信号发送是线程绝对安全的**（非常讨巧的特性）。     
+注意此处特地强调**信号发送是线程绝对安全的**（非常讨巧的特性）。这意味着使用单纯的信号发送方式，得到的结果必然以postEvent()的方式在内存当中运行。        
 
 6. __FUNCTION__、__FILE__、__LINE__分别代指当前代码函数、文件和行数，用于调试用   
 
-7. 该库在使用命令行输出的时候，使用了基本的ESC_CODE的原理来对问题进行颜色输出
+7. 该库在使用命令行输出的时候，使用了基本的ESC_CODE的原理来对问题进行颜色输出;
+
+8. 
