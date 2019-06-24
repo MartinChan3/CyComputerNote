@@ -72,6 +72,7 @@ def fill_single_city_info(url, sItem):
                     sellPricesql = float(sCinema.sellPrice)
                 singleSqlData = [int(sCinema.id), sCinema.name, int(sCinema.mark), sCinema.address, sellPricesql, int(sItem.id), sItem.name]
                 c.execute('insert into cinemas VALUES(?,?,?,?,?,?,?)', singleSqlData)
+    conn.commit()            
     return
                                           
 if __name__ == "__main__":
