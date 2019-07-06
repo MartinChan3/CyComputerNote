@@ -977,4 +977,6 @@ void QCoreApplication::postEvent(QObject *receiver, QEvent *event, int priority)
 2. 数据由逗号分割；    
 3. 花括号保存对象；    
 4. 方括号保存数组；
+
+111. 编译有时候出现传递参数出现问题的情况，可能跟是否使用C++运行时动态库、静态库有关（md和mt）
    
