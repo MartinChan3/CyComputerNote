@@ -283,5 +283,190 @@ decltype(i) e;    //正确：e是一个未初始化的int
 ```
 struct Sales_data {/**/} accum, trans, *salesptr;
 //也可以写成
-struct Sales_data {/**/}
+struct Sales_data {/**/};
+Sales_data accum, trans, *salesptr;
+```   
+C++11规定，可以为数据成员提供一个**类内初始值**。   
+    
+## 第3章 字符串、向量和数组    
+1. using形式不仅可以使用整个命名空间，更可以单独指定某个符号：   
+```
+using std::cout; 
+using std::endl;
+```   
+Tip:头文件不应该包含using声明，这是因为头文件的内容会被拷贝到所有引用它的文件中去。如果头文件中有某个using声明，则会导致所有使用该头文件的文件都有这个声明，这样就会导致可能的冲突。    
+
+2. 直接初始化和拷贝初始化：使用等号，即为拷贝初始化，如果不使用等号，则执行的是直接初始化。   
+
+3. 使用getline读取一整行数据：   
+```
+int main()
+{
+    string line;
+    //每次读入一整行，直到到达文件末尾
+    while (getline(cin, line))
+        cout << line << endl;
+    return 0;
+}
+```    
+注意，保存到line当中的对象并不包括换行符，哪怕一开始为换行符（这种情况下为空）   
+
+4. string::size_type:这体现了标准库类型是与机器无关的特性，如果一条表达式中已经有了size()函数就不要再使用int了，可以避免混用int和unsigned可能带来的问题。 可以使用decltype来解决这个问题  
+```
+for (decltype(s.size()) index = 0; index != s.size() && isspace(s[index]); ++index)
+    s[index] = toupper(s[index]); //将当前字符改成大写形式
+```
+
+5. 字面值不可以直接相加：   
+```
+string s7 = "hello" + "," + s2; //字面值必须和string类型相邻相加才可以继续进行
+```   
+
+6. 新的for使用准则：C++11中引入了新范围语句    
+```
+for (declaration: expression)
+    statement
+```   
+例如：    
+```
+string str("some string");
+//每行输入str中的一个字符
+for (auto c : str)
+    cout << c << endl;
+```    
+
+7. vector对象初始化： C++11支持使用花括号来进行vector对象初始化：   
+```
+vector<string> articles = {"a", "an", "the"};
+vector<string> v0{"a", "an", "the"};
+```   
+使用花括号或者圆括号来区分列表初始值还是元素数量：    
+```
+vector<int> v1(10);  //v1有10个元素，每个值都是0
+vector<int> v2{10};  //v2有1个元素，值为10
+vector<int> v3(10, 1); //v3有10个值为1的元素
+vector<int> v4{10, 1}; //v4有2个元素，值分别为10为1
+```   
+某些操作可能会让迭代器操作失效（pushback在遇到一定体量后，会重新修改了迭代器所指的空间内容）   
+
+8. 迭代器的运算：迭代器可以和一个整数值相加（或相减），其返回值为一个移动了若干位置的迭代器。例如要获得一个指向vector对象中间位置的元素：    
+```
+//计算得到最接近vi中间元素的一个迭代器
+auto mid = vi.begin() + vi.size() / 2;
+```    
+两个迭代器类型相减，得到的类型是名为**difference_type**的带符号整数型。   
+这里给出一个迭代器用于二分搜索：   
+```
+auto beg = text.begin(), end = text.end();
+auto mid = text.begin() + (end - beg) / 2;
+while (mid != end && *mid != sought)
+{
+    if (sought < *mid)
+        end = mid;
+    else 
+        beg = mid + 1;
+    mid = beg + (end - beg) / 2; 
+}
+```
+
+9. 数组：大小不变的存储结构，可用花括号进行初始化。**并且不支持拷贝给其他数组或者赋值**（有些支持该操作的编译器称之为编译器扩展，应当避免使用）；   
+复杂数组声明的例子：   
+```
+int *ptrs[10];   //ptrs是含有10个整形指针的数组
+int &refs[10] = /*?*/; //错误，不存在引用的数组
+int (*Parray)[10] = &arr;  //Parray是指向一个含有10个整数的数组
+int (&arrRef)[10] = arr;   //arr引用一个含有10个整数的数组
+```   
+一般的，依据**类型符由右向左绑定**的规律。例如ptrs由右向左：首先是一个10大小的数组，它的名字是ptrs，然后知道其指向类型为指向int的指针。   
+特例在于Parray，由右向左理解似乎不太合理，更合理的方式在于**由内向外的顺序**。首先*Parray意味着Parray是一个指针，接下来看右侧，知道Parray是个指向大小为10的数组的指针。最后观察左边，可以知道数组中的元素是int。   
+总结：判断数据类型由**先由内至外，后从右至左**来进行判断。    
+```
+int *(&arry)[10] = ptrs; //arry是数组的引用，该数组有10个指针
+```    
+
+10. size_t:使用数组下标时，通常定义为size_t类型，它是一种及其相关的无符号类型(类似difference_type)，它被设计得足够大来表示内存中任意对象大小。    
+同样可以使用新for语句适用于数组的遍历：   
+```
+for (auto i : scores)
+    cout << i << " ";
+```
+
+11. 指针和数组：首先auto是支持指针的
+```
+int ia[] = {0,1,2,3,4,5,6,7,8,9};
+auto ia2(ia); //ia2是一个整形指针，指向ia第一个元素
+ia2 = 42; //错误：ia2作为一个指针，不可以用int值给指针赋值
+```   
+必须支出的是，如果使用decltype关键字时上述转换不会发生，decltype(ia)返回的是10个整数构成的数组:   
+```
+decltype(ia) ia3 = {0,1,2,3,4,5,6,7,8,9};
+ia3 = p; //错误：不能将整形指针给数组赋值
+ia3[4] = i; //正确：吧i赋值给ia3的一个元素
+```   
+总结：decltype覆盖范围没有auto大    
+
+12. 指针也是迭代器：虽然说我们一般不会使用指向尾元素的下一个元素，但是可以用于模仿迭代器模式对数组进行遍历
+```
+int *e = &arr[10]; //指向arr尾元素的下一个位置的指针
+for (int *b = arr; b != e; ++b)
+    cout << *b << endl;
+```   
+
+13. 标准库函数begin和end：为了减少尾后指针极可能使用出错的情况，C++11引入了标准库函数begin和end，包含在iterator头文件中：    
+```
+int ia[] = {0,1,2,3,4,5,7,8,9};
+int *beg = begin(ia); //指向ia首元素
+int *last = end(ia); //指向arr尾元素下一位置的指针
+```    
+例如寻找到一个数组中的第一个负数：   
+```
+int *pbeg = begin(arr), *pend = end(arr);
+while (pbeg != pend && *pbeg >= 0)
+    ++pbeg;
+```   
+
+14. 指针运算：众所周知指针可以进行运算。和迭代器的difference_type不同，两个指针相减结果是一种名为**ptrdiff_t**的标准库类型：   
+```
+auto n = end(arr) - begin(arr); 
+```   
+和size_t一样，ptrdiff_t也是一种定义在cstddef头文件中机器相关的类型，因为其差值可能为一个负数，所以ptrdiff_t是一个带符号类型。     
+只要两个指针指向同一个数组的元素（或者尾元素的下一个元素），就能利用关系运算符对其进行比较，例如下面这个遍历数组中元素的例子：       
+```
+int *b = arr, *e = arr + sz;
+while (b < e) {
+    //使用*b
+    ++b;
+}
+```
+
+15. 下标和指针：下标也可以及其自由的使用，例如：   
+```
+int ia[] = {0,2,4,6,8};
+int *p = &ia[2];
+int j = p[1];   //指向ia[3]
+int k = p[-2];  //指向ia[0]
+```
+虽然string和vector也能执行下标运算，但是还是略有不同，标准库类型都限定了下标必须是无符号类型，而内置的下标没有这个限制。   
+
+16. 与旧代码的接口：   
+1) 混用string对象和C风格字符串：string提供了c_str()函数来转化为c风格的字符串类型：   
+```
+const char *str = s.c_str();
+```   
+2) 使用数组初始化vector对象：   
+vector的初始化其实不用逐一赋值，用迭代器(指针)的方法非常便捷：   
+```
+int int_arr[] = {0, 1, 2, 3, 4, 5};
+vector<int> ivec(begin(int_arr), end(int_arr));
+```   
+这种方法另一个好处是可以提出中间一部分对象：   
+```
+vector<int> subVec(int_arr + 1, int_arr + 4); //拷贝了三个元素，分别为1、2、3
+```     
+> 建议：尽量使用标准库类型而非数组，例如C++程序应尽量使用vector和迭代器而非使用内置数组和指针，使用string而非c风格基于数组的字符串；   
+
+17. 多维数组：严格来说C++语言中没有多维数组，通常说的多维数组本质是数组的数组，理解这一点对日后使用多维数组大有裨益。   
+```
+int ia[3][4];  //大小为3的数组，每个元素时含有4个整数的数组
+int arr[10][20][30] = {0}; //大小为10的数组，每个元素为大小为20的数组，而这些数组元素是含有30个整数的数组，最终将每个元素初始化为0
 ```

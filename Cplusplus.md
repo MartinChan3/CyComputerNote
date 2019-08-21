@@ -985,3 +985,25 @@ void QCoreApplication::postEvent(QObject *receiver, QEvent *event, int priority)
 111. 编译有时候出现传递参数出现问题的情况（异常字符），可能跟是否使用C++运行时动态库、静态库(Runtime Library)有关（md和mt）
    
 112. 左乘和右乘的区别应该如何处理？（待探究的问题）
+
+113. 20190816修改：
+1) 计算任意多边形最速公式并非简单的叉积求和，而是Clipper中给出的范例：
+```
+double Area(const Path &poly)
+{
+  int size = (int)poly.size();
+  if (size < 3) return 0;
+
+  double a = 0;
+  for (int i = 0, j = size -1; i < size; ++i)
+  {
+    a += ((double)poly[j].X + poly[i].X) * ((double)poly[j].Y - poly[i].Y);
+    j = i;
+  }
+  return -a * 0.5;
+}
+```
+效率主要提升在少做了一次乘法
+2) 能够以索引进行遍历的，不要轻易使用新结构进行运算；
+3) 能够以旋转运算进行遍历的，不要轻易使用单位向量的加和减来进行运算；
+4) 整数除以2可以使用右移1位的方法；
