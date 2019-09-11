@@ -683,3 +683,66 @@ sizeof Sales_data::revenue; //另一种获取revenue大小的方式
 ```   
 其中最有意思的就是``sizeof *p``,其中即使p为空指针也不会影响最终的结果，因为sizeof根本也不需要通过运算值就可以知道类型的大小。   
 最后一个例子则揭示了，C++11新标准中，使用了作用域运算符来获取类成员的大小。   
+9. 逗号运算符：逗号运算符经常被人忽略。其运算遵循：先对左侧的表达式求值，然后将求值最终结果丢掉。逗号运算符的真正结果是右侧表达式的值，如果右侧表达式是一个左值，那么最终的求值结果就是个左值；   
+最常见的逗号运算符的使用见于for循环中：     
+```
+vector<int>::size_type cnt = ivec.size();   
+for (vector<int>::size_type ix = 0;ix != ivec.size(); ++ix, --cnt)
+    ivec[ix] = cnt;
+```   
+
+10. 类型转换：任何编程语言都无法避免类型转换这个话题。首先最简单的是隐式转换（implicit conversion）。其次是算数转换。    
+整形提升：false提升为0，true提升为1；小char型（bool、char、short等）都会转换为int，其余的提升为unsigned int。   
+较大的char类型（wchar_t、char16_t、char32_t）提升为int、unsigned int、long、unsigned long、long long和unsigned long long中的最小的一种类型。
+
+11. 显式转换：   
+命名强制转换具有以下形式：   
+```
+cast-name<type>(expression);
+```   
+其中type是目标类型而expression是要转换的值，如果type是引用，则结果是左值。而cast-name会从**static_cast、dynamic_cast、const_cast和reinterpret_cast**
+static_cast:    
+任何具有明确定义的类型转换，只要不包含底层const，都可以使用static_cast。例如：   
+```
+int i, j;
+double slope = static_cast<double>(j) / i;
+```   
+当需要把一个较大的算数类型赋值给较小的类型时，static_cast非常有用。此时强制类型告诉程序阅读者和编译器：这里机器知道并且不在乎潜在的精度损失（这可以避免一大批warning）；     
+static_cast对于编译器无法自动执行的类型转换也非常有用，例如找回存在于void*的指针：   
+```
+void *p = &d;   //正确：任何非常量对象的地址都能存入void*   
+double *dp = static_cast<double*>(p); //转换为double类型指针
+```     
+
+const_cast:     
+const_cast只能改变运算对象是底层const，例如：    
+```
+const char *pc;
+char *p = const_cast<char*>(pc); //正确：但是通过p改变值是未定义的行为
+```    
+这样把常量对象转换为非常量对象的行为，我们一般称为去掉const性质，编译器也就不会再组织我们对该对象进行写操作。如果对象本身不是一个常量，这样的行为就是合法的，但是如果是一个常量，就容易会产生未定义的后果。    
+const_cast的特殊之处就在于只有它能够改变表达式的常量属性，其他cast—name强制类型转换表达式的常量属性都会导致编译器错误。同理，也不能用const_cast改变表达式的类型：   
+```
+const char *cp;
+char *q = static_cast<char*>(cp); //错误：static_cast不能转换掉const性质   
+static_cast<string>(cp); //正确：将字符串字面值换为string类型
+const_cast<string>(cp);  //错误：const_cast只能改变常量属性，而不能改变类型
+```   
+> Tip:const_cast常常用于有函数重载的上下文中，下文将会进行介绍   
+
+reinterpret_cast:     
+reinterpret_cast通常为对象的位模式提供较低层次上的重新解释，例如有以下转换：   
+```
+int *ip;
+char *pc = reinterpret_cast<char*>(ip);
+```   
+这里需要牢记pc所指向的真实对象是一个int而非字符，如果把pc当成普通的字符指针就可能在运行时发生错误。例如：   
+```
+string str(pc);
+```     
+可能导致异常的运行时行为。
+
+> Suggestion:避免强制类型转换时对于检查类型的建议，这个建议对于reinterpret_cast尤其适用，因为这种类型转换总是充满了风险。比较无可厚非的使用是在有重载函数的上下文中使用const_cast，但是在其它情况下使用const_cast也就意味着程序存在某种设计缺陷。其它强制类型转换，例如static_cast和dynamic_cast，都不应该频繁使用。每书写一条强制类型转换语句，都应该反复斟酌是否能以其它方式事项相同目标。    
+**应摒弃早期的强制转换写法**，即type(expr)或者(type)expr，因为这样的类型转换会带来不一样的结果，**完全应该使用static_cast或者const_cast替换**；   
+
+## 第5章 条件语句   
