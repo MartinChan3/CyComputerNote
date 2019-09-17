@@ -745,4 +745,282 @@ string str(pc);
 > Suggestion:避免强制类型转换时对于检查类型的建议，这个建议对于reinterpret_cast尤其适用，因为这种类型转换总是充满了风险。比较无可厚非的使用是在有重载函数的上下文中使用const_cast，但是在其它情况下使用const_cast也就意味着程序存在某种设计缺陷。其它强制类型转换，例如static_cast和dynamic_cast，都不应该频繁使用。每书写一条强制类型转换语句，都应该反复斟酌是否能以其它方式事项相同目标。    
 **应摒弃早期的强制转换写法**，即type(expr)或者(type)expr，因为这样的类型转换会带来不一样的结果，**完全应该使用static_cast或者const_cast替换**；   
 
-## 第5章 条件语句   
+## 第5章 条件语句    
+当程序对的某部分检测到一个它无法处理的问题时，需要用到异常处理。此时检测出问题的部分应该发出某种信号来表明程序遇到了故障，无法再继续下去了。**而且信号的发出方无需知道故障将在何处得到解决**。一旦发出异常信号，检测出问题的部分也就完成了任务。   
+如果程序中含有可能引发异常的代码，那么通常也会有专门的代码处理问题。例如，如果程序的问题是输入无效，则异常处理部分可能会要求用户重新输入正确的数据，如果丢失了数据库连接，会发出报警信息。    
+异常处理机制为程序中的异常检测和异常处理这两部分的协作提供支持，在C++语言中，异常处理包括：   
+- throw表达式：异常检测部分使用throw表达式表示它遇到了无法处理的问题。   
+- try语句块：异常处理使用try语句块处理异常。try语句块以关键字try开始，并以一个或者多个catch子句结束。try语句块中代码抛出的异常通常会被某个catch子句处理。因为catch子句“处理”异常，所以它们也被称为**异常处理代码**。   
+- 一套异常类，用于在throw表达式和对应的catch子句之间传递异常的具体信息。   
+1. throw表达式：程序的异常检测使用throw表达式引发一个异常。throw表达式包含关键字throw和紧随其后的一个表达式，其中表达式的类型就是抛出的异常类型。throw表达式后面通常紧跟一个分号，从而构成一条表达式语句。   
+举个例子，例如检查是否是同一种书籍，然后判断其是否能够相加：   
+```
+Sales_item item1, item2;
+cin >> item1 >> item2;
+//首先检查item1和item2是否表示同一种书籍
+if (item1.isbn() == item2.isbn()) {
+    cout << item1 + item2 << endl;
+    return 0; //表示成功
+} else {
+    cerr << "Data must refer to same ISBN" << endl;
+    return -1; //表示失败
+}
+```    
+在真实的程序中，应该把对象相加的代码和用户交互的代码分离开来。此例中，我们改写程序使得检查完成后不再直接输出一条信息，而是抛出一个异常：   
+```
+//首先检查两条数据是否关于同一种书籍的
+if (item1.isbn() == item2.isbn())
+    throw runtime_error("Data must refer to same ISBN");
+//如果程序执行到这里，表示两个ISBN是相同
+cout << item1 + item2 << endl;
+```   
+这段代码中，如果ISBN不一样就会抛出一个异常，该异常时类型runtime_error的对象，抛出异常就会**终止当前的函数，并且把控制权交给能处理该异常的代码**。   
+类型runtime_error是标准库异常类型的一种，定义在stdexcept头文件中。我们必须使用一个string对象或者一个C风格的字符串来初始化一个runtime_error对象。   
+
+2. try语句块：其通常形式如    
+```
+try {
+    program-statements
+} catch (exception-declaration) {
+    handler-statements
+} catch (exception-declaration) {
+    handler-statements
+} //...
+```     
+在之前的例子里，我们使用了一个throw表达式来避免把两个代表不同书籍的Sales_item相加。我们假设执行Sales_item对象加法的代码时与用户交互的代码分离开来的。其中与用户交互的代码负责处理发生的异常，它的形式可能如下：   
+```
+while (cin >> item1 >> item2) {
+    try {
+        //执行添加两个Sales_item对象的代码
+        //如果添加失败，代码抛出一个runtime_error
+    } catch (runtime_error err) {
+        //提醒用户两个ISBN必须一致，询问是否重新输入   
+        cout << err.what() 
+             << "\nTry Again? Enter y or n" << endl;
+        char c;
+        cin >> c;
+        if (!cin || c == 'n')
+            break;
+    }
+}
+
+```   
+程序本来要执行的任务出现在try语块中，因为这段代码可能会抛出一个runtime_error类型的异常。   
+try语句块对应一个catch的子句，该子句负责处理类型为runtime_error的异常。如果try语句块的代码抛出了runtime_error异常，接下来执行catch块内的语句。在我们书写的catch子句中，输出一段提示信息要求用户指定程序是否继续。   
+给用户的提示信息中最后输出了err.what()的返回值，其实就是其初始化的字符串。   
+函数在寻找处理代码的过程中退出：在复杂系统中，程序在抛出异常代码之前，其执行路径可能已经经过了多个try语句块。例如，一个try语句块可能调用了包含另一个try语句块的函数，新的try语句块可能又调用了一个包含新的含有try语句块的函数，依次类推。   
+寻找处理代码的过程与函数的调用链正好相反。当异常被抛出时，首先搜索抛出该异常的函数。如果没有找到匹配的catch子句，终止该函数，并在调用该函数的函数中继续寻找。如果还是没有找到匹配的catch子句，这个新的函数也会被终止，继续搜索调用它的函数。以此类推，沿着程序执行的路径逐层回退，直到找到适合类型的catch的子句为止。   
+如果最终还是没找到与任何匹配的catch子句，程序转到名为terminate的标准库函数，该函数行为和系统有关，一般情况下执行该函数将会导致程序非正常退出。     
+对于那些没有任何try语句块定义的异常，也按照类似的方式处理；毕竟，没有try语句块也就意味着没有匹配的catch子句。如果一段程序没有try语句块且发生了异常，系统会调用terminate函数并终止当前程序的执行。    
+3. 标准异常：
+C++标准库定义了一组类，用于报告标准库函数中遇到的问题，这些异常类也可以在用户编写的程序中使用，它们分别定义在4个头文件中：   
+- exception头文件定义了最通用的异常类exception。它只报告异常的发生，不提供任何额外信息。   
+- stdexcept头文件定义了几种常用的异常类，这些类会在下面表中列出。   
+- new头文件定义了bad_alloc异常类型。   
+- type_info头文件定义了bad_cast异常类型。   
+    
+## 第6章 函数
+1. 函数基础：这里已经非常熟悉，不过有一些需要注意的点是   
+- 传入函数的实参的顺序并没有规定，编译器可以以任何顺序对实参求值（这意味着传入的实参千万不能互相打架）    
+- 函数的**返回类型不能是数组类型或者函数类型**，但是可以是指向数组或者函数的指针，下文会介绍如何返回数组的指针/引用以及函数的指针。   
+> Tip:一个函数中的静态变量可以很方便的进行所谓次数统计的工作，这一点非常特别，当然它们只会在第一次运行时初始化一次。   
+```
+size_t count_calls()
+{
+    static size_t ctr = 0;  
+    return ++ctr;
+}
+
+int main() {
+    for (size_t i = 0; i != 10; i++)
+        cout << count_calls() << endl;
+    return 0;
+}
+//将会输出1到10的数字
+```     
+2. 参数传递：   
+- 使用引用避免拷贝：除了已经熟知的原因（不复制对应的对象），还有一些原因例如某些类型根本不支持拷贝（例如IO类型）
+- 利用引用返回多参数：一个经常使用的技巧就是使用引用来返回额外的信息     
+- const形参和实参：顶层const只作用于对象本身   
+
+```
+const int ci = 42;  //不能改变ci，const是顶层的
+int i = ci;  //正确：当拷贝ci时，会忽略它的顶层const
+int * const p = &i;  //const是顶层的，不能给p赋值
+*p = 0;
+```     
+- 尽量使用常量引用：应该从底层函数就注意使用该原则，这样避免设计高一阶函数时出现该问题；
+- 数组形参：前面提过，数组有两个性质限制了其在函数使用中有区别——1) 不允许拷贝数组；2) 使用数组时通常会将其转换成指针；尽管不能以值传递的方式传递数组，但是我们可以把形参转换为类似数组的形式：   
+
+```
+//以下三个print函数等价
+void print(const int*);
+void print(const int[]);
+void print(const int[10]); //这里的10只能表示我们希望的数组的大小，实际并不一定
+```
+随之而来的问题就是管理指针形参数量问题，通常使用：   
+1) 使用标记指定数组长度：例如C风格字符串到\0之前确认为有效；   
+2) 使用标准库规范:向函数传递数组的首元素和尾后元素的指针，这种方法收到标准库技术的启发，例如：   
+```
+void print(const int *beg, const int *end)
+{
+    while (beg != end)
+        cout << *beg++ << endl;
+}
+```
+调用时传入两个指针，可以使用标准库的begin和end函数：   
+```
+int j[2] = {0, 1};
+print(begin(j), end(j));
+```
+3) 显示的传递一个数组的大小：这种方法在C和传统C++方法中非常常见     
+
+**数组引用形参**：C++允许将变量定义为数组的引用,同理，函数形参也可以是数组是的引用。此时引用形参绑定到对应的实参上，也就是绑定到数组上：   
+```
+void print(int (&arr)[10])
+{
+    for (auto elem : arr)
+        cout << elem << endl;
+}
+```   
+> Tip:这里需要区分引用的数组和数组的引用之间的区别——f(int &arr[10]) //错误：arr为引用的数组、f(int (&arr)[10]) //z正确：arr为具有10个整数的整形数组的引用    
+这里虽然没问题，但是由于指定了数组维度的大小，这样也限制了print函数的可用性，下文中还会给出不限大小形式的输出；    
+  
+传递多维数组：就像之前介绍的那样，C++语言中实际上没有真正的多维数组，所谓的多维数组其实是数组的数组。    
+例子：   
+```
+//matrix指向数组的首元素，该数组的元素是由10个整数构成的数组
+void print(int (*matrix)[10], int rowSize);
+{/*...*/}
+```
+> Tip:同上面的引用数组，注意括号是必须的。   
+同样也可以使用数组的语法定义函数，此时编译器会一如既往的忽略掉第一个维度，所以最好不要把它包括在形参列表内：    
+```
+//等价定义
+void print(int matrix[][10], int rowSize){}
+```    
+
+**main:处理命令行选项**：    
+有时候，我们的确需要给main传递实参，常见的main带参形式我们已经很熟了：   
+```
+int main(int argc, char *argv[]){...}
+```
+argc等于记录argv中字符串的数量，因为第二个参数为数组，main函数也可以定义为：   
+```
+int main(int argc, char **argv){...}
+```     
+例如在一个可执行文件中传入main函数的内容，
+```
+prog -d -0 ofile data0
+```
+那么argc = 5，argv里包含以下C风格的字符串：   
+```
+argv[0] = "prog";
+argv[1] = "-d";
+argv[2] = "-o";
+argv[3] = "ofile";
+argv[4] = "data0";
+argv[5] = 0;
+```
+> Warning:当使用argv中间的实参时，一定要记得可选的实参从argv[1]开始，**argv[0]保存的是程序的名字，而非用户输入**。
+
+**含有可变形参的函数**：C++11标准提供两种方法来解决编写处理不同数量实参的函数的问题：1) 如果所有是参类型相同，我们可以传递一个名为initializer_list的标准库类型；2) 如果实参的类型不同，我们可以编写一种特殊的函数，也就是所谓的可变参数模板，后面会介绍。    
+C++还有一种**省略符**形参，用它可以传递可变数量的实参。下面会进行介绍，但是这种功能一般只用于和C函数的接口程序。    
+
+#### initializer_list形参    
+如上文所说，initializer_list针对的是类型相同的形参的模板，和vector一样，在定义时需要包含所属的元素例如：   
+```
+initializer_list<string> ls; 
+initializer_list<int> li;
+```    
+但是和vector不一样的是，initializer_list对象中的元素永远是常量值。   
+例如我们用它来输出错误信息：   
+```
+void error_msg(initializer_list<string> il)
+{
+    for (auto beg = il.begin(); beg != il.end(); ++beg)
+        cout << *beg << " ";
+    cout << endl;
+}
+```
+如果想向initializer_list形参中传递一个值的序列，则必须把序列放在一对花括号内：    
+```
+if (excepted != actual)
+    error_msg({"functionX", excepted, actual});
+else 
+    error_msg({"functionX", "okay"});
+```    
+当然，含有initializer_list形参的函数也可以拥有其他形参，例如调试系统可以有个名为ErrCode的类来表示不同类型的错误，因此我们可以改写之前的程序，使其包含一个initializer_list形参和一个ErrCode形参：   
+```
+void error_msg(ErrCode e, initializer_list<string> il)
+{
+    cout << e.msg() << ": ";
+    for (const auto &elem : il)
+        cout << elem << " ";
+    cout << endl;
+}
+```
+那么对应的调用形式可以写为：    
+```
+if (excepted != actual)
+    error_msg(ErrCode(42), {"functionX", excepted, actual});
+else
+    error_msg(ErrCode(0), {"functionX", "okay"});
+```    
+
+#### 省略符形参：   
+只用于兼容C的varargs的情况，其他情况基本不会使用，形式例如：    
+```
+void foo(parm_list, ...);
+void foo(...);
+```    
+
+3. 返回类型和return语句：   
+> Tip: **不要反悔局部对象的引用或者指针**，这是因为在生命周期结束后，局部变量所占用的空间也会被释放掉。     
+> Tip: 那么什么时候反悔指针和引用呢？例如比较两个数，返回较大的那个数，就可以使用。    
+```
+const string &shorterString(const string &s1, const string &s2)
+{
+    return s1.size() <= s2.size() ? s1 : s2;
+}
+```     
+
+#### 返回类型的函数和调用运算符     
+首先调用运算符也有结合律，例如：   
+```
+auto sz = shorterString(s1, s2).size();
+```
+**引用返回左值**：函数的返回类型决定是否为左值，调用一个返回引用的函数得到左值，其他返回类型得到右值。可以像使用其他左值那样来使用返回的引用，特别是，能够给返回类型（非常量引用）直接赋值：   
+```
+char &get_val(string &str, string::size_type ix)
+{
+    return str[ix]; 
+}
+
+int main()
+{
+    string s("a value");
+    cout << s << endl; //输出a value
+    get_val(s, 0) = 'A';
+    cout << s << endl; //输出A value
+    
+    return 0;
+}
+```    
+
+**列表初始化返回值**：C++11规定，函数可以返回花括号的值的列表。和其他返回结果一样，此处的列表也用来表示函数返回的临时量进行初始化，例如：   
+```
+vector<string> process()
+{
+    if (excepted.empty())
+        return {};
+    else if (excepted == actual)
+        return {"functionX", "okay"};
+    else 
+        return {"functionX", excepted, actual};
+}
+```    
+
+递归：main函数不能递归    
+
+**返回数组指针**：
