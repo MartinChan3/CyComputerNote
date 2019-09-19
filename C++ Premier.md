@@ -122,7 +122,7 @@ if (*curErr)
 }
 ```   
 
-14. 顶层const：指针本身就是一个对象，而它又可以指向另一个对象，因此这是两个独立的问题。用名词**顶层const(top-level const)**来表示指针本身是一个常量，而用名称**底层const(low-level const)**表示指针所指向的对象是一个常量。更一般的，顶层const可以表示任何对象是常量，这一点对于任何数据类型适用。底层const则与指针和引用等符合类型的基本类型有关。比较特殊的是，指针类既可以是顶层const也可以是底层const,这一点和其他类型区别相比明显：    
+14. 顶层const：指针本身就是一个对象，而它又可以指向另一个对象，因此这是两个独立的问题。用名词**顶层const(top-level const)** 来表示指针本身是一个常量，而用名称**底层const(low-level const)** 表示指针所指向的对象是一个常量。更一般的，顶层const可以表示任何对象是常量，这一点对于任何数据类型适用。底层const则与指针和引用等符合类型的基本类型有关。比较特殊的是，指针类既可以是顶层const也可以是底层const,这一点和其他类型区别相比明显：    
 ```
 int i = 0;
 int *const p1 = &i;  //p1值不能被改变，是一个顶层const
@@ -1046,5 +1046,66 @@ int (*func(int i))[10];
 - (*func(int i))[10]表示解引用func的调用将得到一个大小是10的数组；    
 - int (*func(int i))[10]表示数组中元素是int类型。   
 #### 使用尾置返回类型    
-C++11标准中还提供了一种方法可以简化上述的func声明方法，就是使用**尾置返回类型**，任何函数都能使用尾置返回，但是对于比较复杂的类型最为有效。
+C++11标准中还提供了一种方法可以简化上述的func声明方法，就是使用**尾置返回类型**，任何函数都能使用尾置返回，但是对于比较复杂的类型最为有效。比如返回类型是数组的指针或者数组的引用。尾置返回类型跟在形参列表后面并且以一个->符号开头，为了表示函数真正的返回类型跟在形参列表之后，我们在本应该出现返回类型的地方放置一个auto:      
+```
+//func接受一个int类型的实参，返回一个指针，该指针指向含有10个整数的数组   
+auto func(int i) -> int(*)[10]
+```
+#### 使用decltype   
+还有一种情况，如果我们知道函数返回的指针指向哪个数组，就可以使用decltype关键字来声明返回类型，例如：    
+```
+int odd[] = {0, 1, 2, 3, 4};
+int even[] = {5, 6, 7, 8, 9};
+decltype(odd) *arrPtr(int i)
+{
+    return (i % 2) ? &odd : &even;
+}
+```     
+decltype表示arrPtr返回类型是一个指针（不应该是一个数组吗），并且该指针所指的对象与odd类型一致。因为odd是数组，所以arrPtr返回一个指向含有5个整数的数组指针。    
+> Tip:值得注意的是，declctype并不负责把数组类型转成对应的指针，所以decltype的结果是个数组，想要表示arrPtr返回指针还需要在函数声明时加一个*符号。    
+
+4. 函数重载：    
+定义：**如果同一作用域内几个函数名字相同但形参列表不同，我们称之为重载**。（关键词：名字相同、形参不同）    
+**重载和const形参**：     
+根据前文所说，**顶层const不影响传入该函数的对象** ，一个拥有顶层const的形参无法和另一个没有顶层const的形参区分开来：   
+```
+Record lookup(Phone);
+Record lookup(const Phone);  
+
+Record lookup(Phone*);
+Record lookup(const Phone*);
+```    
+以上两组都是重复声明，每一组的第二个声明和第一个声明都是等价的。      
+
+另一方面，如果形参是某种类型的指针或者引用，则通过区分其指向的是常量对象还是非常量对象可以实现函数重载，此时const是底层的：    
+```
+//对于接受引用或指针的函数来说，对象是常量还是非常量对应的形参不同   
+//定义了4个独立的重载函数
+Record lookup(Account&);  
+Record lookup(const Account&);   //新函数，用于常量引用
+
+Record lookup(Account*);
+Record lookup(const Account*);   //新函数，作用于指向常量的指针
+```     
+之所以编译不报错的原因是，（**因为是通过是否为底层const来判断**）编译器可以通过实参是否为常量来推断应该调用哪个函数。因为const不能转化为其他类型，所以我们只能把const对象传递给const形参。相反的，因为非常量可以转化为const，所以上面的4个函数都能作用于非常量对象或者只想非常量对象的指针。不过下文中还会介绍，**当我们传递一个非常量对象或者非常量对象指针时，编译器会优先选用非常量版本的函数** 。     
+
+const_cast和重载：     
+上文中曾经提过，const_cast在重载函数的情景中最为有用，例如之前的shorterString函数：   
+```
+const string &shorterString(const string &s1, const string &s2)
+{
+    return s1.size() <= s2.size() ? s1 : s2;
+}
+```    
+这个函数的参数和返回类型都是const string的引用，我们可以对两个非常量的string实参调用这个函数，但是返回的结果仍然是const string的引用。因此我们**需要一种新的shorterString函数，当它的实参不是常量时，得到的结果是一个普通的引用** ，使用const_cast可以做到这一点：   
+```
+string &shorterString(string &s1, string &s2)
+{
+    auto &r = shorterString(const_cast<const string&>(s1),
+    const_cast<const string&>(s2)));
+    return const_cast<string&>(r);
+}
+```    
+在这个版本的函数中，首先将它的实参强制转化为对const的引用，然后调用了shorterString函数的const版本。const版本返回对const string的引用，这个引用事实上绑定在了某个初始的非常量实参上。因此，我们可以将其再转换为一个普通的string&，这显然是安全的。     
+
 
