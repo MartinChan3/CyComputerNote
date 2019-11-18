@@ -1026,7 +1026,80 @@ pp = Q_NULLPTR;
 - 类函数的重载，通过对象是否为常量来区分；
 - 普通函数的不同形参的重载，这里只能允许底层const来进行区分，如果是顶层const则视为重复    
 
-116. 尽量在类中使用class前置声明，这样的话可以尽量避免编译时间变长并且打开时间也会变长。    
+116. 尽量在类中使用class前置声明，这样的话可以尽量避免编译时间变长并且打开时间也会变长。此外前置声明可以用于**指针和引用**。    
 
-117. 类似宏定义改变变量本身的内容，可以使用函数指针来简化实际代码中的写法；
+117. 类似宏定义改变变量本身的内容，可以使用函数指针来简化实际代码中的写法；    
+
+118. 在QList、QMap等容器中，如果使用的非指针集合作为类的成员，需要注意提供其拷贝函数（A(const  A&)）的实例化解释，否则可能会报C2248的错误；    
+
+119. _BLOCK_TYPE_IS_VALID 错误经常在**堆区内容被错误释放的情况下报出**，应该检查是否有自我释放的错误空间。[链接](https://blog.csdn.net/zjdnwpu/article/details/70245500)     
+
+120. QPointer的作用是：当QPointer指针引用的对象被销毁时候，p2指针会自动指向NULL，而p1的引用对象如果被销毁，p1则不会自动指向NULL，而是会变成野指针。(用途：避免多次访问时出现问题，此外注意QPointer只能用于QObject的子类)[链接](https://blog.csdn.net/xiezhongyuan07/article/details/80263614)    
+
+121. Qt中QImage部分功能无法正常使用时，需要看下是否使用的QApplication进行的实例化（而非QCoreApplication），如果不是的话可能会出错。   
+
+131. qml有一个陷阱在于，如果函数中间有语句存在执行问题，它虽然会报错，但是并不会中断或者停止，而会结束该函数剩下语句的执行，转而执行剩余未执行完的其他函数。    
+
+132. QMake中的INCLUDEPATH指的是包含路径，而DEPENDENPATH指的是依赖库所在目录；（问题来了，不都能通过LIB直接指定库了吗？为什么还需要DEPENDENPATH？）
+
+133. QtPlugin系统，动态插件只有dll即可动态加载，可在运行时加载，静态插件提前在QMake和main函数中调用（之后使用QtPluginLoader::staticInstance调用出来）    
+
+134. QtPlugin的Plug&Paint例子里面有个很精彩的片段：    
+```
+void MainWindow::populateMenus(QObject *plugin)
+{
+    BrushInterface *iBrush = qobject_cast<BrushInterface *>(plugin);
+    if (iBrush)
+        addToMenu(plugin, iBrush->brushes(), brushMenu, SLOT(changeBrush()),
+                  brushActionGroup);
+
+    ShapeInterface *iShape = qobject_cast<ShapeInterface *>(plugin);
+    if (iShape)
+        addToMenu(plugin, iShape->shapes(), shapesMenu, SLOT(insertShape()));
+
+    FilterInterface *iFilter = qobject_cast<FilterInterface *>(plugin);
+    if (iFilter)
+        addToMenu(plugin, iFilter->filters(), filterMenu, SLOT(applyFilter()));
+}
+//! [10]
+
+void MainWindow::addToMenu(QObject *plugin, const QStringList &texts,
+                           QMenu *menu, const char *member,
+                           QActionGroup *actionGroup)
+{
+    foreach (QString text, texts) {
+        QAction *action = new QAction(text, plugin);
+        connect(action, SIGNAL(triggered()), this, member);
+        menu->addAction(action);
+
+        if (actionGroup) {
+            action->setCheckable(true);
+            actionGroup->addAction(action);
+        }
+    }
+}
+```    
+其中SLOT被解析为字符串，揭露了connect函数中的本质，这也是告诉使用者，可以自由的使用类似字符串的方式去传递槽函数的内容来进行操作，此外应该也可以通过QMetaType（QObject）来获取一个类从类名到函数名的全部信息，贼猛。   
+
+135. 多态的变态之处：接上，观察调用QAction的例子：   
+```
+void MainWindow::changeBrush()
+{
+    QAction *action = qobject_cast<QAction *>(sender());
+    BrushInterface *iBrush = qobject_cast<BrushInterface *>(action->parent());
+    const QString brush = action->text();
+
+    paintArea->setBrush(iBrush, brush);
+}
+```
+这里硬生生从QAction中解析出一个QObject，直接转为Brush的接口拿到数据，将封装、继承和多态发挥的淋漓尽致。   
+这种写法非常值得前后端均进行借鉴，一个QObject自由的跨于QAction和自定义的Interface之间，真的方便。     
+此外，这种给UI件赋予QObject，然后不用寻找哪个槽函数，只需从sender() 获取返回值的方法非常值得推广，省得每一个index的老方式来进行寻找。      
+
+136. QPluginLoader加载的插件的初始化过程发生于QPluginLoader的加载时期；
+
+137. 
+
+
+
 

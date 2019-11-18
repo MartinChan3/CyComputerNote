@@ -1106,7 +1106,7 @@ string &shorterString(string &s1, string &s2)
     return const_cast<string&>(r);
 }
 ```    
-在这个版本的函数中，首先将它的实参强制转化为对const的引用，然后调用了shorterString函数的const版本。const版本返回对const string的引用，这个引用事实上绑定在了某个初始的非常量实参上。因此，我们可以将其再转换为一个普通的string&，这显然是安全的。     
+在这���版本的函数中，首先将它的实参强制转化为对const的引用，然后调用了shorterString函数的const版本。const版本返回对const string的引用，这个引用事实上绑定在了某个初始的非常量实参上。因此，我们可以将其再转换为一个普通的string&，这显然是安全的。     
 
 #### 调用重载函数        
 调用重载函数时需要进行函数匹配，也叫重载确定。当调用重载函数时可能有三种结果：    
@@ -1355,3 +1355,178 @@ decltype(sumLength) *getFunc(const string &);
 类的基本思想是**数据抽象**和**封装**，而数据抽象是一种依赖于**接口**和**实现(implementation)**分离的技术，类的接口包括用户所能执行的惭怍，类的实现则包括类的数据成员、负责接口实现的函数体以及定义类所需的各种私有函数。    
 封装实现了类的接口和实现的分离。封装后的类隐藏了它的实现细节，也就是说，类的用户只能使用接口而无法访问实现的部分。    
 类想要实现数据抽象和封装，首先需要定义一个抽象数据类型，在抽象数据类型中，由类的设计者负责思考类的实现过程；使用该类的程序员只需要抽象的思考类型做了什么，而无需了解类型的工作细节。    
+
+### 7.1 定义抽象数据类型   
+我们在第一章当中的Sales_item类是一个抽象数据类型，我们通过它的接口来使用一个Sales_item对象，我们不能通过访问Sales_item对象的数据成员，实际上，我们连这个类有哪些数据成员都不太知晓。    
+相反的，Sales_data类就不是一个抽象的数据类型，它能够允许用户直接访问它的数据成员，并且要求 用户来编写操作。要想把Sales_data编程抽象数据类型，我们就需要定义一些操作来供类的用户使用。一旦Sales_data定义了它自己的操作，我们就可以封装（隐藏）它的数据成员了。   
+#### 7.1.1 设计Sales_data类
+我们的最终目的是令Sales_data支持与Sales_item类完全一样的操作集合。Sales_item类有一个名为isbn的成员函数，并且支持+、=、+=、<<和>>运算符。    
+我们将会在接下来的章节介绍如何自定义运算符。现在我们先为这些运算定义普通的函数形式。执行加法和IO的函数我们将会不作为Sales_data的成员，相反的，我们会将其定义为普通的函数；执行复合复制运算的函数是成员函数。Sales_data类无需专门定义赋值运算，其原因会在下文介绍。   
+总结至今，有以下功能需要实现：   
+- 一个isbn成员函数，用于返回isbn号
+- 一个combine成员函数，用于将一个Sales_data对象加到另一个对象上
+- 一个名为add的函数，执行两个Sales_data对象的加法
+- 一个read函数，将数据从istream读入到Sales_data对象中去   
+- 一个print函数，将Sales_data对象的值输出到ostream
+
+##### 使用改进的Sales_data类   
+在考虑实现我们的类之前，先看看如何使用以上这些接口函数。举个例子，我们使用这写函数来编写书店程序的另一个版本，转而使用Sales_data对象：   
+```
+Sales_data total;           
+if (read(cin, total)) {  //读入一笔交易
+    Sales_data trans;    
+    while (read(cin, trans)) {  //读入剩余交易
+        if (total.isbn() == trans.isbn())
+            total.combine(trans);
+        else {
+            print(cout, total) << endl;   
+            total = trans;
+        }
+        print(cout, total) << endl;  
+} else {
+    cerr << "No data?!" << endl;
+}
+```     
+#### 定义改进的Sales_data类   
+需要分清接口和类实现的区别，有些除了基础实现的内容，额外的内容需要在类中实现。   
+作为接口组成部分的非常远函数，例如add、read和print等，它们的定义和声明都在类的外部。改进的Sales_data类应该如下所示：   
+```
+struct Sales_data {
+    //新的操作对象
+    std:string isbn() const { return bookNo; }
+    Sales_data& combine(const Sales_data&);
+    double avg_pricef() const;
+
+    //旧数据成员
+    std::string bookNo;
+    unsigned units_sold = 0;
+    double revenue = 0.0;
+};
+
+//Sales_data的非成员接口函数
+Sales_data add(const Sales_data&, const Sales_data&);
+std::ostream &print(std::ostream&, const Sales_data&);
+std::istream &print(std::istream&, Sales_data&);
+```
+> 定义在类内部的函数是隐式的inline函数（例如上文中的isbn()方法）   
+
+#### 定义成员函数——引入this
+这里Premier抛出了一个问题，对于isbn函数：   
+```
+std::string isbn() const { return bookNo; }
+```   
+如何知道bookNo成员所依赖的对象？   
+这里成员函数通过一个名为this的额外隐式参数来访问调用它的那个对象。当我们调用一个成员函数时，用请求该函数的对象地址初始化this。例如，如果调用``total.isbn()``,则编译器负责把total的地址传递给isbn的隐式形参this,可以等价地认为编译器将该调用重写成了如下的形式：    
+```
+//伪代码，用于说明调用成员函数的实际执行过程
+Sales_data::isbn(&isbn);
+```    
+其中，调用Sales_data的isbn成员时传入total的地址； 同理，我们当然可以对隐式它的this进行显式的调用，例如：    
+```
+std::string isbn() const { return this->bookNo; }
+```
+因此this就是一个**总是指向“这个”对象的常量指针**，C++不会允许this中保存的地址；      
+
+#### 引入const成员函数     
+isbn函数的另一个关键之处是紧随参数列表之后的const关键字，**这里const的作用是修改隐式this指针的类型**。     
+默认情况下，this类型是指向类类型非常量版本的常量指针，例如在Sales_data成员函数中，this的类型是Sales_data *const。尽管this是隐式的，但是它仍然要遵循初始化规则，意味着默认情况下我们不能把this绑定到一个常量对象上调用普通的成员函数。    
+如果isbn是一个普通函数而且this是一个普通的指针参数，那么我们应该把this声明成const Sales_data *const。毕竟，在isbn的函数体内不会改变this所指的对象，所以把this设置为指向常量的指针有助于提高函数的灵活性。    
+由于this是隐式的，并且不会出现在参数列表中，所以在哪里将this声明为指向常量的指针就成为必须面对的问题。C++的做法是允许吧const关键字放在成员函数的参数列表之后，此时，紧跟在参数列表后的const表示this是一个指向常量的指针，像这样使用const的成员函数称为**常量成员函数（const member function）**。即等价于以下形式：    
+```
+std::string Sales_data::isbn(const Sales_data *const this)
+{
+    return this->isbn;
+}
+```
+> Tip: 常量对象，以及常量对象的引用或者指针都只能调用常量成员函数；
+    
+#### 定义一个返回this对象的函数    
+函数combine的设计初衷类似于复合赋值运算符+=，调用该函数的对象代表的是赋值运算符左侧的运算对象，右侧运算对象则通过显式的实参被传入函数：    
+```
+Sales_data& Sales_data::combine(const Sales_data &rhs)
+{
+    units_sold += rhs.units_sold; 
+    revenue += rhs.revenue;
+    return *this;
+}
+```     
+当我们的交易处理程序调用以下函数：    
+```
+total.combine(trans);  //更新变量total当前的值
+```    
+该函数最值得关注的部分是它的返回类型和返回语句。*一般来说，当我们定义的函数类似某个内置运算符时，应该令该函数的行为尽量模仿这个运算符。内置的赋值运算符把它的左侧运算对象当成左值返回*，因为为了与它保持一致，combine函数必须返回引用类型，因为此时的左侧运算对象是一个Sales_data的对象，所以返回类型应该是Sales_data&。（简单来说，传统运运算符就是返回左值的引用）     
+     
+### 7.1.3 定义类相关的非成员函数
+类的作者常常需要定义一些辅助函数，例如add、read和print，尽管这些函数定义的操作从概念上来说属于类的接口部分，但是它们实际上并不属于类本身。    
+> Tip: 一般来说，如果非成员函数是类接口的组成部分，则这些函数的声明应该与类在同一个头文件内。    
+#### 定义read与print函数   
+```
+//输入的信息包含ISBN、售出总数和售出价格
+istream &read(istream &is, Sales_data& item)
+{
+    double price = 0;
+    is >> item.bookNo >> item.units_sold >> price;
+    item.revenue = price * item.units_sold;
+    return is;
+}
+ostream &print(ostream &os, const Sales_data &item)
+{
+    os << item.isbn() << " " << item.units_sold << " "
+        << item.revenue << " " << item.avg_price();
+    return os;
+}
+```
+以上代码有两点值得注意，第一，read和print分别接受一个各自IO类型的引用作为其参数，这是因为IO类属于不能够被拷贝的类型，因此我们只能通过引用来传递它们。而且，因为读取和写入的操作会改变流的内容，所以两个函数接受的都是普通饮用，而非对常量的引用。    
+第二点，print函数不负责换行。一般来说，执行输出任务的函数应该尽量减少对格式的控制，这样可以由用户确定是否换行。     
+#### 定义add函数    
+add函数与combine函数略有区别，它是接受两个Sales_data对象作为参数，返回的是一个新的Sales_data，用于表示前两个对象的和：    
+```
+Sales_data add(const Sales_data &lhs, const Sales_data &rhs)
+{
+    Sales_data sum = lhs;   
+    sum.combine(rhs); 
+    return sum;
+}
+```    
+
+### 7.1.4 构造函数    
+每个类都分别定义了它的对象被初始化的方式，类通过一个或者几个成员函数来控制其对象的初始化过程，这些函数叫做**构造函数(Constructor)**。 构造函数的任务是初始化对象的数据成员，无论何时只要类的对象被创建，就会执行构造函数。    
+构造函数非常复杂，接下来会在多个章节接触到关于构造函数的知识。当然，我们从最简单的开始。构造函数名字与类名相同，构造函数也有一个（可能为空的）参数列表和一个（可能为空的）函数体。类可以包含多个构造函数，类似重载函数，不同的构造函数必须在参数数量或者参数类型上有所区别。    
+
+#### 合成的默认构造函数    
+先前的total和trans没有构造函数，那么它们是如何初始化的呢？我们没有为这些对象提供初始值，因此我们知道他们执行了默认初始化。类通过一个特殊的构造函数来控制默认初始化过程，这个函数叫做**默认构造函数**，默认构造函数无需任何实参。    
+如我们缩减，默认构造函数在很多方面都有其特殊性，其中之一就是，如果我们的类没有显式的定义构造函数，那么编译器就会为我们隐式的定义一个默认构造函数。    
+编译器创建的构造函数又被称为**合成的默认构造函数(synthesized default constructor)**。对于大多数类来说，这个合成的默认构造函数将按照如下规则初始化类的数据成员：
+- 如果存在类内初始值，用它来初始化成员；
+- 否则，默认初始化该成员；    
+例如Sales_data为units_sold和revenue提供了初始值，所以合成的默认构造函数将使用这些值来初始化对应的成员；同时，它把bookNo默认初始化为一个空字符串。    
+#### 某些类不能依赖于合成的默认构造函数     
+合成的默认构造函数只适合非常简单的类。对于一个普通的类来说，必须定义其默认构造函数，原因有三：    
+1. 编译器只有在发现类不包含任何构造函数的情况下才会替我们生成一个默认的构造函数。一旦我们定义了一些其他的构造函数，那么除非我们再定义一个默认的构造函数，否则类将没有默认构造函数。这条规则的依据是——如果一个类在某种情况下需要控制对象初始化，那么该类很可能在所有情况下都需要控制。    
+> Tip: 只有当类没有声明任何构造函数，编译器才会自动地生成默认构造函数（这一点挺有意思，这意味着一旦有一个构造函数，就不会支持默认的构造函数）    
+2. 第二个原因在于，对于某些类来说，能合成的默认构造函数可能执行错误的操作。例如之前介绍的，如果定义在块中的内置类型或复合类型（例如数组和指针）的对象被默认初始化，那么它们的值将是未定义的。该准则同样适用于默认初始化的内置类型成员。*因此，含有内置类型或者复合类型成员的类应该在类的内部初始化这些成员，或者定义一个自己的默认构造函数*，否则，用户在创建类对象时就可能得到未定义的值了。   
+> Warning: 如果类包含有内置类型或者复合类型的成员，则只有当这些成员全部被赋予了类内的初始值时，这个类才适合于使用合成的默认构造函数。    
+(以上的这个问题在之前编程中很常见，例如使用一个vector是必须是每个对象必须有实例化的能力，即有默认构造函数)     
+3. 编译器有时候不能为某些类合成默认的构造函数。例如，如果类中包含一个其他类类型的成员并且整个成员的类型没有默认构造函数，那么编译器将无法初始化该成员。对于这样的类来说，我们必须自定义默认构造函数，否则该类讲没有可用的默认构造函数。     
+##### 定义Sales_data的构造函数    
+对于我们Sales_data类来说，我们将使用下面的参数定义4个不同的构造函数：    
+- 一个istream&，从中读取一条交易信息；   
+- 一个const string&,表示ISBN编号；一个unsigned，表示售出的图书数量；以及一个double，表示图书的售出价格。    
+- 一个const string&, 表示ISBN编号；编译器将赋予其他成员默认值；   
+- 一个空参数列表（即默认构造函数），这样得到：   
+```
+struct Sales_data {
+    //构造函数
+    Sales_data() = default;
+    Sales_data(const std::string &s) : bookNo(s) {}
+    Sales_data(const std::string &s, unsigned n, double p) : 
+                bookNo(s), units_sold(n), revenue(p * n) {}
+    Sales_data(std::istream &);
+
+    //之前已有的其他成员……
+};
+```
+##### =default的含义   
+形如``Sales_data() = default;``首先明确一点，因为该构造函数不接受任何实参，所以它是一个默认构造函数。我们定义这个构造函数的目的仅仅是因为我们既需要其他形式的构造函数，也需要默认的构造函数，我们希望这个函数的作用完全等同于前面提到的合成默认构造函数。    
+在C++11标准中，如果我们需要默认行为，那么可以通过在参数列表后面写上``=default``来要求编译器生成构造函数。其中=default既可以和声明一起出现在类的内部，也可以作为定义出现在类的外部。和其他函数一样
+
