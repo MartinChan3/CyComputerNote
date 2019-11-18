@@ -1528,5 +1528,123 @@ struct Sales_data {
 ```
 ##### =default的含义   
 形如``Sales_data() = default;``首先明确一点，因为该构造函数不接受任何实参，所以它是一个默认构造函数。我们定义这个构造函数的目的仅仅是因为我们既需要其他形式的构造函数，也需要默认的构造函数，我们希望这个函数的作用完全等同于前面提到的合成默认构造函数。    
-在C++11标准中，如果我们需要默认行为，那么可以通过在参数列表后面写上``=default``来要求编译器生成构造函数。其中=default既可以和声明一起出现在类的内部，也可以作为定义出现在类的外部。和其他函数一样
+在C++11标准中，如果我们需要默认行为，那么可以通过在参数列表后面写上``=default``来要求编译器生成构造函数。其中=default既可以和声明一起出现在类的内部，也可以作为定义出现在类的外部。和其他函数一样，在内部则是内联，在外部则不是内联。    
+##### 构造函数初始值列表     
+接下来我们介绍类中定义的两个构造函数：    
+```
+Sales_data(const std::string &s) : bookNo(s) {}
+Sales_data(const std::string &s, unsigned n, double p) : 
+            bookNo(s), units_sold(n), revenue(p * n) {}
+```    
+按照以上形式，出现的新的部分包含了冒号后的部分以及花括号之间的代码，其中花括号定义了空的函数体。我们吧冒号后的内容称为**构造函数初始值列表（constructor initialize list）**,它负责为新创建的一个或者几个数据成员赋初值。构造函数初始值时成员名字的一个列表，每个名字后面紧跟括号括起来（或者在花括号内的）成员初始值。不同成员的初始化通过逗号分隔开来。     
+只有一个string类型参数的构造函数使用这个string对象初始化bookNo，对于units_sold和revenue则没有显式地初始化。当某个数据成员被构造函数初始值列表被忽视时，它将以与合成默认构造函数相同的方式隐式初始化。在此例中，这样的成员使用类内初始值初始化，因此只接受一个string参数的构造函数等价于：    
+```
+Sales_data(cosnt std::string &s) : 
+            bookNo(s), units_sold(0), revenue(0) {}
+```     
+> Advice: 构造函数不应该轻易的覆盖掉类内的初始值，除非新赋的值与原值不同。如果你不能使用类内初始值，则所有构造函数都应该显式地初始化每个内置类型的成员。     
+##### 在类外部定义构造函数     
+与其它构造函数不同，以istream为参数的构造函数需要执行一些实际的操作。   
+```
+Sales_data::Sales_data(std::istream &is)
+{
+    read(is, *this); 
+}
+```
+构造函数没有返回类型，所以上述定义从我们指定的函数名字开始，和其他成员函数一样，当我们在类外定义构造函数时，必须指明该构造函数是哪个类的成员。因此，Sales_data::Sales_data的含义是我们定义Sales_data类的成员，它的名字是Sales_data，所以其是一个构造函数；    
+这个构造函数没有构造函数初始值列表，或者说的更明确一点，它的构造函数初始值列表示空的，但是由于执行了构造函数体，所以对象的成员仍然能够被初始化。    
+这里使用了*this来把this对象作为引用实参传递给read函数。    
+
+### 拷贝、赋值与析构    
+除了定义类的对象如何初始化之外，类还需要控制拷贝、赋值和销毁对象时发生的行为。对象在几种情况下会被拷贝，例如初始化变量以及以值的方式传递或者返回一个对象等。当我们使用了赋值运算符时都会发生赋值操作。当对象不再存在时执行销毁的操作，比如一个局部对象会在创建它的块结束时被销毁，当vector对象销毁时其存储在其中的对象也会被销毁。    
+如果我们不主动去定义这些操作，那么编译器会替我们合成它们。一般来说，编译器生成的版本将对对象的每个成员执行拷贝、赋值和销毁操作。     
+#### 某些类不能依赖合成的版本     
+尽管编译器能够替我们合成拷贝、赋值和销毁的操作，但是必须要清楚一点，对于某些类来说合成的版本无法正常工作，特别是当类需要分配对象之外的资源时，合成的版本会常常是小。举个例子，接下来会介绍C++是如何分配和管理动态内存的，而我们会看到，管理动态内存的类通常不能依赖于上述操作的合成版本。    
+不过值得注意的是，很多需要动态内存的类能（而且应该）使用vector对象或者string对象管理必要的存储空间，使用vector或者string类能够避免分配和释放内存带来的复杂性。    
+进一步讲，如果类包含vector或者string成员，则其拷贝、赋值和销毁的合成版本能够正常工作。当我们对含有vector成员的对象执行拷贝或者赋值操作时，vector类会设法拷贝或者赋值成员中的元素。当这样的对象被销毁时，将销毁vector对象，也就是依次销毁vector中的每一个元素，这一点与string非常类似。    
+
+## 7.2 访问控制与封装     
+C++语言中，使用**访问说明符（access specifiers）加强类的封装性**：    
+- 定义在public说明符之后的成员可以在整个程序内被访问，public成员往往定义类的接口；
+- 定义在pirvate说明符之后的成员可以被类的成员函数访问，但是不能被使用该类的代码访问，即private封装（或者说隐藏了）类的实现细节；    
+一个类中对于访问说明符的出现次数并没有规定，反正只要从出现开始，就开始了这个说明符有效范围一直持续到下一个说明符或者结尾。     
+#### 使用class或struct关键字    
+两种形式的定义其实仅仅是形式上的区别，唯一的区别是：**struct和class默认访问权限不太一样**。class是pricate，struct是public。    
+
+### 7.2.1 友元    
+上文中，我们把Sales_data的数据成员变成了private的，那么read、print和add函数也就无法正常编译了，因为尽管这几个函数是该类接口的一部分，但是它们并不是类的成员。    
+类因此提出了友元的概念，一个类可以允许其他类或者函数访问它的非公有成员，方法是将其它类或者函数添加为友元（frined）。如果类想要把一个函数作为他的友元，只需要增加一条以friend关键字开始的函数声明即可：    
+```
+class Sales_data {
+    friend Sales_data add(const Sales_data&, const Sales_data&);
+    friend std::istream &read(std::istream&, Sales_data&);
+    friend std::ostream &print(std::ostream&, const Sales_data&);
+
+    //接下来声明照旧……
+};
+```
+友元声明只能出现在类定义的内部，但是在类内出现的具体位置不限，不过一般来说，最好在类开始或者结束的时集中声明友元。      
+> Tip: 友元不是类的成员，也不受它所在区域访问控制级别的约束。     
+
+## 7.3 类的其他特性    
+### 7.3.1 类成员再探
+我们定义一对相互关联的类，分别为Screen和Window_mgr。    
+#### 定义一个类型成员    
+Screen表示显示器中的一个窗口，每个Screen包含一个用于保存Screen内容的string成员和三个string::size_type类型的成员，它们分别表示光标的位置以及屏幕的高和宽。   
+除了定义数据和函数成员之外，类还可以自定义某种类型在类中的别名。由类定义的类型名字和其它成员一样存在访问限制，可以是public或者private中的一种：  
+```
+class Screen {
+public:
+    typedef std::string::size_type pos;
+private: 
+    pos cursor = 0; 
+    pos height = 0, width = 0;
+    std::string contents;
+};
+```     
+关于pos的声明有两点需要注意，首先使用了typedef，当然我们可以等价的使用新标准的类型别名：    
+```
+using pos = std::string::size_type;
+```    
+其次，用来定义类型的成员必须先定义后使用，这一点和普通成员函数有所区别（后文中会介绍），因此类型成员通常出现在类开始的地方。    
+
+#### Screen类的成员函数
+为了使类更加使用，还需要添加一个构造函数来使用户能够定义屏幕的尺寸和内容，以及其他两个成员分别负责移动光标和读取给定位置的字符：   
+```
+class Screen {
+public: 
+    typedef std::string::size_type pos;
+    Screen() = default; //因为Screen有另一个构造函数，所以本函数必须
+    //cursor被其类内初始值初始化为0
+    Screen(pos ht, pos wd, cahr c) : height(ht), width(wd), contents(ht *wd, c) {}
+    char get() const { return contents[cursor]; } //隐式内联
+    inline char get(pos ht, pos wd) const;  //显示内联
+    Screen &move(pos r, pos c);             //能在其后设置为内联
+
+privaet: 
+    pos cursor = 0; 
+    pos height = 0, width = 0;
+    std::string contents;
+};
+```
+如上文所示，因为定义了一个三参数的构造函数，我们也必须要提供一个=default的默认构造函数。    
+#### 令成员作为内联函数    
+类内类外同样能显示的定义内联函数（内联函数的定义有灵活性）：    
+```
+inline Screen &Screen::move(pos r, pos c) //定义处指定
+{
+    pos row =  r * width;
+    cursor = row + c;
+    return *this;
+}
+
+char Screen::get(pos r, pos c) const  //类声明时指定
+{
+    pos row = r * width;
+    return contents[row + c];
+}
+```
+虽然在定义和声明的地方都说明inline是完全合法的，但是一般只在类外部定义时说明inline，这样更容易理解。    
+
+#### 重置成员函数
 
