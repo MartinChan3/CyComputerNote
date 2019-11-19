@@ -1646,5 +1646,94 @@ char Screen::get(pos r, pos c) const  //类声明时指定
 ```
 虽然在定义和声明的地方都说明inline是完全合法的，但是一般只在类外部定义时说明inline，这样更容易理解。    
 
-#### 重置成员函数
+#### 可变数据成员    
+有时候（但是不频繁）会发生这种情况，**我们希望能够修改类的某个数据成员，即使是在一个const成员函数内**。可以通过在变量的声明中加入mutable关键字来做到这点。    
+一个可变数据成员（mutable data member）永远不会是const，即使是const对象中的成员。因此一个const成员函数可以改变一个可变成员的值。例如，我们给Screen添加一个名为access_ctr的可变成员，来追踪每个Screen成员函数被调用了多少次：    
+```
+class Screen {
+public: 
+    void some_member() const;
+private: 
+    mutable size_t access_ctr; //即使在一个const对象内也能被修改
+    //......
+};
 
+void Screen::some_member() const
+{
+    ++access_ctr;
+}
+```    
+
+#### 类数据成员的初始值    
+在定义好Screen类之后，我们将继续定义一个窗口管理类并用它表示显示器上的一组Screen。这个类将包含一个Screen类型的vector，每个元素表示一个特定的Screen。默认情况下，我们希望Window_mgr类开始时总是拥有一个默认初始化的Screen。在C++11标准中，最好的方式就是把这个默认值声明为一个类内初始值：    
+```
+class Window_mgr {
+private: 
+    std::vector<Screen> screens{Screen(24, 80, ' ')};
+};
+```
+> Tip： 当提供一个类内初始值时，必须以=或者花括号表示。    
+
+#### 7.3.2 返回*this的成员函数    
+```
+class Screen {
+public:  
+    Screen &set(char);
+    Screen &set(pos, pos, char);
+    //......
+}
+
+inline Screen &Screen::set(char c)
+{
+    contents[cursor] = c;   //设定当前光标所在位置为新值
+    return *this;           //将this对象当做左值进行返回
+}
+inline Screen &Screen::set(pos r, pos col, char ch)
+{
+    contents[r * width + col] = ch;
+    return *this;
+}
+```    
+为什么要刻意返回引用而非对象呢？原因在于，如果需要进行类似的连续操作：   
+```
+myScreen.move(4, 0).set('#');
+```
+那么，不使用引用的后果就是只最后改变了副本而非对象本身。    
+#### 从const成员函数返回*this    
+所以稍微有点点新的冲突发生了，如果我们定义了一个新的display函数用于显示，我们令其为const成员，而此时返回的this将会变成一个常量指针，那么再执行以下操作就会引发错误：   
+```
+myScreen.display(cout).set('*');
+```    
+这个例子总体就是提醒我们const成员函数返回的*this将会是常量引用。   
+#### 基于const的重载    
+通过区分成员函数是否为const，我们可以对其进行重载，其原因和我们之前说判断指针参数是否指向const而重载函数的理由差不多，具体说来，因为非常量版本的函数对于常量对象不可用，所以我们只能在一个常量对象上调用const函数。另一方面，虽然非常量对象调用常量版本或者非常量版本都可以，但是很明显调用非常量版本是一个更好的选择。    
+这里我们将会定义一个do_display的私有函数，用它来负责实际的打印Screen的操作，所有的display操作都会调用这个函数，然后返回执行的对象： 
+```  
+class Screen {
+public:   
+    Screen &display(std::ostream &os)
+    {
+        do_display(os); return *this;
+    }
+    const Screen &display(std::ostream &os) const 
+    {
+        do_display(os); return *this;
+    }
+private:
+    //该函数负责显示Screen的内容
+    void do_display(std::ostream &os) const {os << contents;}
+};
+```
+这里透露的信息是，当一个成员调用另一个成员时，this指针会在中间隐式的传递。例如非常量版本传递了非常量的this，而常量的恰恰相反。最后合法的调用就变成了：      
+```
+Screen myScreen(5, 3);
+const Screen blank(5, 3);
+myScreen.set('#').display(cout);    //调用的非常量版本
+blank.display(cout);                //调用的常量版本
+```   
+> Important Advice: 为什么要在私有函数中再定义一个小的do_display函数？这是因为：   
+> - 避免在多处使用同样代码；
+> - 我们预期随着类规模的发展，display函数可能会变得更加复杂，此时把功能相同的操作写在一处而非两处就很有用了；   
+> - 我们可能在do_display中添加某些调试信息，但是这些信息会在最终的发布版本中去掉。显然只在do_display中对其进行添加或者删除会方便很多。   
+> - 额外的函数调用不不会增加开销，尤其是我们还使用了隐式的内联函数来定义do_display。   
+> 实践中，设计良好的C++代码通常包含大量类似do_display的小函数；    
