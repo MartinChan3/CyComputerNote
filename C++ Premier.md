@@ -2128,4 +2128,399 @@ private:
 
 # 第二部分 C++标准库    
 
-# 第8章 IO库
+# 第8章 IO库    
+## 8.1 IO类
+为了支持不同种类的IO处理操作，标准库还规定了一些其他IO类型，其中iostream定义了用于读写流的基本类型，fstream定义了读写命名文件的类型,sstream定义了读写内存string对象的类型；同时还定义了w开头的宽字符对象来处理宽字符数据，例如wcin、wcout等。    
+### 8.1.1 IO对象无拷贝或赋值   
+我们不能拷贝或者对IO对象赋值；    
+### 8.1.2 条件状态    
+IO设置了多种条件状态，用于修正和访问状态。注意，*一个流一旦发生错误，其后续的IO操作都会失败* ，因此最好的办法就是将流每次的结果当做一个条件来使用：    
+```
+while (cin >> word)
+    //ok：继续读……
+```    
+#### 查询流的状态     
+将流作为条件使用，只能知晓流是否有效，但是无法知道具体发生了什么；有时候我们还是需要知道发生了什么的，例如，键入了文件结束标示后我们的应对措施，可能和遇到一个IO设备错误的处理方式是不同的。    
+IO库定义了一个与机器无关的iostate类型，它提供了表达流状态的完整功能。IO类型定义了4个iostate类型的constexpr值来表示特定的位模式，这些值用来表示特定类型的IO条件，可以用与位运算符一起来进行一次性检测或者设置多个标志位：     
+- badbit： 表示系统级错误，一旦badbit被置位，流就无法使用了；      
+- failbit: 这表示如果被置位，那么流遇到了一个字符错误，但是还可以继续使用；
+- eofbit: 尾部标识符。到达尾部时会和failbit一起被置位；
+- goodbit: 为0，表示流未发生错误；    
+#### 管理条件状态     
+流对象的rdstate成员返回一个iostate值，对应流当前状态,setstate操作将给特定的位定条件位置位。clear成员是一个重载的成员，他有一个不接受参数的版本，而另一个版本接受一个iostate类型的参数，前者清除所有错误标志位：     
+```
+//记住cin当前状态
+auto old_state = cin.rdstate();  
+cin.clear();
+process_input(cin);
+cin.setstate(old_state);   //恢复cin状态
+```     
+至于局部，下面例子将failbit和badbit复位，但保持eofbit不变：    
+```
+//复位faildbit和badbit，保持其他标志位不变   
+cin.clear(cin.rdstate() & ~cin.failbit & ~cin.badbit); //~取反符号，X & ~X = 0可以作为一个复位的写法
+```    
+
+### 8.1.3 管理输出缓冲     
+计算机有个特定的机制在于，每个输出流都有一个缓冲区，例如cout一个东西，但是文本串既可能直接打印出来，也可以被保存在缓冲区中，等会儿再打印。这种操作最大的好处是某些系统写入很慢，但是如果能允许操作系统将多个输出操作组合为单一的设备写操作就可以带来很大的性能提升。    
+导致缓存区刷新的原因很多：
+- mian函数return
+- 缓冲区满
+- endl操作符
+- unitbuf设置流的内部状态，例如cerr是立即刷新的，就是因为cerr是设置unitbuf的
+- 一个输出流可能会被关联到另一个流
+> Warning:如果程序崩溃，输出缓冲区不会被刷新    
+
+### 关联输入和输出流    
+当一个输入流被关联到一个输出流时，任何试图从输入流读取数据的操作都会先刷新关联的输入流。标准库将cout和cin关联到一起，因此下面语句：   
+```
+cin >> ival;
+```    
+导致cout的缓冲区被刷新。     
+> 交互式系统通常应该关联输入流和输出流，但是这意味着所有输出，包括用户提示信息，都会在读操作之前被打印出来。    
+tie有两个重载版本：一个版本不带参，返回指向输出流的指针。如果本对象当前关联到一个输出流，则返回的就是这个流的指针，如果未关联到流，则返回空指针。 tie的第二个版本接受一个指向ostream的指针，将自己关联倒刺ostream。即x.tie(&o)将流x关联到输出流o。   
+我们既可以把一个istream对象关联到另一个ostream，也可以讲一个ostream关联到连一个ostream:   
+```
+cin.tie(&cout);   //可以但是一般不会这么做
+ostream *old_tie = cin.tie(nullptr); //cin不再与其它流关联
+cin.tie(&cerr); //读取cin会刷新cerr而不是cout
+cin.tie(old_tie);  //重建cin和cout间的正常关联
+```
+每个流最多关联到一个流，但是多个流可以绑定到同一个ostream。     
+
+## 8.2 文件输入输出     
+使用ifstream从一个给定文件读取数据,ostream给一个特定文件写入数据，以及fstream可以读写给定文件。    
+### 8.2.1 使用文件流对象   
+```
+ifstream in(ifile);  //构造一个ifstream并打开给定文件
+ofstream out;        //输出文件流未关联到任何文件
+```    
+我们可以用main函数来传递参数指定的：    
+```
+ifstream input(argv[1]);  //打开销售记录文件
+ofstream output(argv[2]); //打开输出文件
+Sales_data total;         //保存销售额的总量    
+if (read(input, total)){
+    Sales_data trans;
+    while (read(input, trans)) {
+        if (total.isbn() == trans.isbn())
+            total.combine(trans);
+        else {
+            print(output, total) << endl;
+            total = trans;
+        }
+        print(output, total) << endl;
+    }
+} else
+    cerr << "No data?!" << endl;
+```
+除了读写是命名文件以外，这段程序与229页的加法程序几乎完全一样，虽然read和print定义的时候都是istream&和ostream&，但是我们仍然能够传递fstream的对象。    
+#### open和close    
+```
+ifstream in(ifile);   //构筑一个ifstream并打开给定文件
+ofstream out;         //输出文件流未与任何文件关联
+out.open(ifile + ".copy");  //打开指定文件
+
+if (out)  //检查是否打开成功
+    //执行
+in.close(); //一旦文件被打开，再open就会错误，所以需要先close再open
+in.open(ifile + "2");
+```    
+此外fstream的自动析构函数中，会自动调用close()，所以无需担心局部变量未被关闭。   
+### 8.2.2 文件模式
+每个流都有一个关联的**文件模式**：   
+- in: 以读方式打开
+- out: 以写方式打开
+- app: 每次写操作均定位到文件末尾
+- ate: 打开文件后立即定位到文件末尾
+- truc: 截断文件    
+- binary: 以二进制方式进行IO    
+默认情况下，文件会以truc模式打开（out清空先前全部内容，重新指向文件头开始写入）解决问题的方式是使用app模式同时打开：   
+```
+ofstream app("file2", ofstream::app); //隐含为输出模式
+ofstream app2("file2", ofstream::out | ofstream::app);
+```        
+
+## 8.3 string流    
+sstream定义了三个类型支持string的IO，istringstream、ostringstream、stringstream。    
+### 8.3.1 使用istringstream    
+当某些工作是对郑航文本处理，而其他一些工作是处理单行内的单个单词，通常可以使用istringstream;     
+例如输入一个表格，每行都是一个人带他的几个号码。首先定义一个简单的类来描述输入数据：   
+```
+struct PersonInfo {
+    string name;
+    vector<string> phones;
+};
+```    
+我们读取该数据文件，并且在一个循环中反复读取一条记录，提取一个人名和若干号码：   
+```
+string line, word;
+vector<PersonInfo> people;
+while (getline(cin, line)) {
+    PersonInfo info;
+    istringstream record(line);
+    record >> info.name;      //这里解释为读到空格截止   
+    while (record >> word)
+        info.phones.push_back(word);
+    people.push_back(info);
+}
+```    
+
+### 8.3.2 使用ostringstream    
+当我们希望一起打印信息时，ostringstream是很有用的。例如我们希望验证每个电话格式，然后进行打印。我们先将所有输出内容“写入”到一个内存ostringstream中：   
+```
+for (const auto &entry : people) {
+    ostringstream formatted, badNums;  //每个循环步创建的对象
+    for (const auto &num : entry.phones) {
+        if (!valid(nums)) {
+            badNums << " " << nums;
+        }
+        else
+        {
+            formatted << " " << format(nums);
+        }
+    }
+    if (badNums.str().empty())
+        os << entry.name << " " << formatted.str() << endl;
+    else
+        cerr << "input error:" << entry;
+}
+```
+
+# 第9章 顺序容器
+这章我们首先着重介绍**顺序容器(sequential container)**。    
+## 9.1 顺序容器概述：    
+顺序容器有很多，但是在不同方面性能又有折中：   
+- 向容器添加或从容器中删除元素的代价；
+- 非顺序访问容器中元素的代价；   
+有以下顺序容器：    
+- vector: 可变大小数组；支持随机快速访问，在尾部之外的位置或删除元素变得很慢；   
+- deque: 双端队列。支持快速随机访问。在头尾位置插入、删除速度很快；   
+- list: 双向链表；只支持双向顺序访问，在list的任何位置插入/删除都很快   
+- forward_list: 单向链表。只支持单向顺序访问，在链表的任何位置插入/删除都很快
+- array: 固定大小数组，支持快速随机访问，不能添加或者删除元素。   
+- string: 与vector类似的容器，但是专门用于保存字符。随机访问快。在尾部插入/删除的速度快。    
+#### 确定使用哪种顺序容器    
+通常使用vector是最好的选择，以下是一些选择容器的基本原则：    
+- 如果有很多小的元素，并且空间的额外开销很重要，不要使用list或者forward_list;
+- 若果要求随机访问元素，应该使用vector或者deque；
+- 如果程序要求中间插入或者删除元素，应该使用list或者forwardlist；   
+- 如果程序需要在头尾位置插入或者删除元素，但是不会在中间插入或者删除，使用dequeue；    
+- 如果程序只有在数据读入的时候才需要在容器中间位置插入元素，随后需要随机访问元素：   
+首先需要去定是否真的是需要在容器中间添加元素。如果一般要得到有序的序列，应该使用vector添加数据，然后调用标准库的sort函数来重排；   
+如果硬要在中间位置插入元素，则考虑在输入阶段使用list，一旦输入完成，将会把list中的内容拷贝到一个vector中。    
+
+## 9.2 容器库概览    
+#### 对容器可以保存的元素类型的限制    
+虽然我们可以在容器中保存几乎任何类型，但是有些情况需要单独讨论，例如顺序容器有一个版本的构造函数接受容器大小的参数，它就会使用了元素类型的默认构造函数。所以这种类型的容器在构造时不能只传递一个元素数目参数：   
+```
+//假设noDefault是一个没有默认构造函数的类型   
+vector<noDefault> v1(10, init);    //正确：提供了元素初始化器（init是个noDefault类型的值）
+vector<noDefault> v2(10);          //错误：必须提供一个元素初始化器
+```    
+
+### 9.2.1 迭代器    
+这里基本都知道，唯一有些区别的是，forward_list的迭代器不支持递减运算符（--）   
+#### 迭代器范围     
+这里提到C++的一个重要概念，**左闭合区间**：   
+[begin, end)
+这里end可以和begin指向相同的位置，但是不能指向begin之前，这反映到迭代器中就是begin()和end()所分别代表的迭代器；    
+
+### 9.2.2 容器类型成员    
+我们已经见过几个类型：size_type、iterator和const_iterator;当然其实一般还提供了反向迭代器(reverse_iterator)，如果对一个反向迭代器++，那么会得到上一个元素。    
+剩下的就是类型别名。我们可以在不了解元素类型的情况下使用它，例如如果我们需要知道元素类型，我们使用value_type；如果需要元素类型的一个引用，可以使用reference或者const_reference。这样的元素相关的类型别名在**泛型编程**中相当有用，后面我们会介绍它。    
+这些类型再使用时，我们必须显式的使用其类名：   
+```
+list<string>::iterator iter;
+vector<int>::difference_type count;
+```   
+
+### 9.2.3 begin和end成员    
+没啥好说的     
+
+### 9.2.4 容器的定义和初始化    
+这里指出，除了array之外，其他类容器的构造函数都支持创建一个指定类型的空容器：   
+- C c         使用默认构造函数的空容器；    
+- C c1(c2)    c1初始化为c2的拷贝,c1和c2必须是相同的类型；写成C c1=c2也可以；
+- C c{a, b, c}或者c = {d, e} 列表初始化   
+- C c(iter_b, iter_e) 使用迭代器进行指定范围内的初始化    
+顺序容器才支持的初始化：
+- C seq(n)    seq包含n个元素；   
+- C seq(n, t) seq包含n个初始化为值t的元素；    
+
+这里尤其推荐迭代器初始化的方式，因为这样**可以方便的跨不同顺序容器之间初始化**；    
+
+#### 标准库array具有固定大小    
+array最特殊的就在于固定大小，当定义一个array时，除了指定元素类型，还需要指定容器大小：   
+```
+array<int, 42>      //类型为：保存了42个int的数组
+array<string, 10>   //类型为：保存了10个string的数组
+
+array<int, 10>::size_type i; //数组包含了元素类型和大小
+array<int>::size_type j;     //错误，因为前者不是一个类型！
+```
+同时，由于array默认构造特性，它一定是非空的，如果初始化列表数量不够，则会在后面跟着使用默认初始化函数构造到填满array元素：   
+```
+array<int, 10> ia3 = {42};  //ia3[0]为42，剩余元素为0
+```    
+有意思的是，虽然array各方面和数组非常像，但是**数组不支持的拷贝或者赋值操作**，在array里行得通：   
+```
+int digs[2] = {1, 2};
+int cpy[2] = digs;
+array<int, 10> digits = {1, 2};
+array<int, 10> copy = digits;
+```    
+
+### 9.2.5 赋值和swap    
+赋值运算符可以用于所有的容器，赋值运算符可以把左边容器中的全部元素换成右边容器中元素的拷贝：   
+```
+c1 = c2;   //不管c1和c2之前大小如何，赋值后大小和数量和c2一模一样
+c1 = {a, b, c}; //赋值后，c1大小为3
+```   
+另一个操作是swap，stl中的调用形式为：   
+```
+swap(c1, c2); //swap比c2向c1拷贝要快得多
+```    
+此外还有assign操作，类似迭代器构造函数，例如：   
+```
+seq.assign(itb, ite);
+```    
+这里给出一个例子，注意assign同样是对象完全被覆盖：   
+```
+list<string> names;
+vector<const char*> oldstyle;   
+names = oldstyle;  //错误：容器类型不匹配    
+names.assign(oldstyle.cbegin(), oldstyle.cend());
+```    
+swap的隐藏陷阱：因为swap是内存数据结构的整体交换，这意味着，（除了string以外）指向容器的迭代器、引用和指针在swap操作之后都不会失效，但时实际上它们已经不属于容器了。当然string的迭代器啥的均已失效。这点尤其要注意，否则很容易出现一些奇怪的bug;    
+swap对array是稍有不同的，它是真正的会交换元素，时间和array中元素数量成正比。   
+在新标准中，容器既提供了成员函数版本的swap，也提供了非成员版本的swap，而早期的标准库版本只提供成员函数版本的swap。非成员版本的swap在泛型编程中是非常重要的，所以尽量用非成员版本吧~    
+    
+### 9.2.7 关系运算符     
+每个容器都支持==和!=,除了无序关联容器，都支持关系运算符（>、<、>=、<=）,其比较策略类似string的比较。   
+> Note:只有当其元素类型定义了相应的比较运算符只有，我们才可以使用关系运算符来比较两个容器；    
+     
+## 9.3 顺序容器的操作    
+### 9.3.1 向顺序容器添加元素    
+- push_back/emplace_back: 在c的尾部创建一个值为t或者由args创建的元素，返回void；    
+- push_front/emplace_front: 与上面相反，在头部添加；   
+- insert(p, t)/emplace(p, args)：在迭代器p指向的元素**前**创建一个值为t或者由args创建的元素，返回指向新添加元素的迭代器；    
+
+> 关键概念——容器元素是拷贝：当我们用一个对象来初始化容器时，实际上放入容器的是对象的一个拷贝，而非对象本身；    
+
+#### 使用insert的返回值    
+使用insert的返回值，作用是可以反复的在同一个位置进行插入：   
+```
+list<string> lst;
+auto iter = lst.begin();
+while (cin >> word)
+    iter = lst.insert(iter, word);
+```    
+
+#### 使用emplace操作    
+新标准的三个新成员函数——emplace_front、emplace和emplace_back，这些操作构造不是拷贝元素，而是分别将参数擦混递给元素类型的构造函数，并用其直接构造元素，例如：   
+```
+c.emplace_back("89757", 25, 15.99);
+```
+其传递的参数类型必须和类型的构造函数类型相匹配；    
+
+### 9.3.2 访问元素    
+除了forward_list，包含array在内的顺序容器都有front和back成员函数，来返回首元素和尾元素的引用：   
+```
+if (!c.empty()) {
+    auto val = *c.begin(), val2 = c.front();
+    auto last = c.end();
+    auto val3 = *(--last); //注意，此处不能递减forward_list的迭代器
+    auto val4 = c.back();    
+}
+```    
+这里有两点需要注意：   
+1. 迭代器的end一定是指向尾元素后的空元素，为了获取尾元素，必须先递减该迭代器；   
+2. 进行任何操作前，需要确保c非空；否则后面的操作都可能是未定义的；    
+
+此外注意，**访问成员函数返回的是引用**：   
+```
+if (!c.empty()) {
+    c.front() = 42;
+    auto &v = c.back();
+    v = 1024;                //改变了c中的元素
+    auto v2 = c.back();
+    v2 = 0;                  //未改变
+}
+```     
+#### 下标操作和安全的随机访问    
+string、vector、deque和array均提供了下标运算符，我们永远希望下标时合法的，at函数可以略微规避一下类似的风险：    
+```
+vector<string> svec;   //空vector
+cout << svec[0];       //运行错误
+cout << svec.at(0);    //抛出一个out_of_range异常
+```    
+
+### 9.3.3 删除元素    
+- pop_back()、pop_front() 
+- erase(p): 
+例如：    
+```
+while (!ilist.empty()) {
+    process(ilist.front());  //对ilist的首元素进行一些处理
+    ilist.pop_front();       //完成后删除首元素    
+}
+```    
+如果从容器内部删除一个元素，erase既允许我们从指定位置删除元素，也可以删除一对迭代器指定的范围内所有元素，注意：**两种形式的erase都返回的是指向删除的（最后一个）元素之后位置的迭代器**，例如，这边给出了一个循环中删除list中所奇数元素的例子：    
+```
+list<int> lst = {0, 1, 2, 3, 4, 5};
+auto it = lst.begin();
+while (it != lst.end())
+    if (*it % 2)  //若元素为奇数
+        it = lst.erase(it);   //删除此元素，此时指向的是原it的下一个元素
+    else
+        ++it;
+```    
+如果要删除多个元素，例如：    
+```
+elem1 = slist.erase(elem1, elem2); //调用后,elem1 == elem2   
+```
+迭代器elem1指向我们要删除的第一个元素，而elem2指向我们要删除的最后一个元素之后的位置；     
+
+### 9.3.5 改变容器的大小    
+```
+list<int> ilist(10, 42);  //10个int，每个值都是42
+ilist.resize(15);         //后面跟5个0
+ilist.resize(25, -1);     //添加10个-1
+ilist.resize(20);         //删除后面20个元素
+```    
+
+### 9.3.6 容器操作可能使迭代器失效
+这个是很明显的，尤其对于vector这种根据现有体积不断改变固定存储的结构类型；目前来看，vector、stirng或者deque这三种都必须要考虑迭代器、引用和指针失效的问题：   
+```
+//傻瓜循环，删除偶数元素，复制每个奇数元素   
+vector<int > vi = {0~9};
+auto iter = vi.begin(); 
+while (iter != vi.end()) {
+    if (*iter % 2) {
+        iter = vi.insert(iter, *iter);  //复制
+        iter += 2;                      //向前移动迭代器，跳过当前元素以及出插入到它之前的元素    
+    }
+    else
+        iter = vi.erase(iter);
+}
+```   
+这里最难理解的应该就是插入是在给定迭代器位置之前插入，而返回的是指向新数据位置的迭代器，因此要向后移动两位；而erase已经指向删除后的有效下一位了；       
+#### 不要保存end返回的迭代器    
+每次我们添加删除vector或者string的元素后，或者deque，原来的end返回的迭代器总会失效。因此我们需要反复调用end()，而不能只是在循环中使用之前end的返回值；C++考虑到这一点做了很多优化，end()操作都特别快的部分原因就在于此；    
+例如：   
+```
+auto begin = v.begin(),
+        end = v.end();
+while(begin != end)
+{
+    //操作
+    //插入新值，对begin重新复制，否则会失效
+    ++begin;  //向前移动begin，因为想在此新元素之后插入元素
+    begin = v.insert(begin, 42); //插入新值
+    ++begin;  //移动到下一位
+}
+```   
+在绝大多数的标准库是实现上，改代码会导致无限循环，因为这个end不会再指向v中任何元素，而是指向v中尾元素之后的位置；安全的方法是直接调用``while(begin != v.end())``    
+
+## 9.4 vector对象是如何增长的
