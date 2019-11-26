@@ -2535,5 +2535,9 @@ stack<int> stk(deq);     //从deq拷贝元素到stk
 ```    
 默认情况下，stack和queue是基于deque实现的，priority_queue是在vector之上实现的。我们可以在创建一个适配器时将一个命名的顺序容器作为第二个类型参数，来重载默认容器类型。    
 ```
-//
-```
+//在vector上实现的空栈
+stack<string, vector<string>> str_stk;
+//str_stk2在vector上实现，初始化保存svec的拷贝
+stack<string, vector<string>> str_stk2(svec);
+```    
+对于一个给定的适配器，可以
