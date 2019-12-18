@@ -35,7 +35,7 @@ QSocketNotifier QNetworkAccessManager QIODevice::readyRead() | 当在一个低�
 ### QThread 具有可选事件循环的低级API   
 QThread是Qt当中所有线程控制的基础，实例化的QThread提供了一个并行事件循环，允许在次线程中调用QObject的槽函数。子类化QThread提供了一个并行事件循环，允许在次线程中调用QObject的槽函数（**这说明事件循环还是多线程的实现基础**）。子类化QThread允许应用程序在开始其事件循环之前初始化新的线程，或者运行没有事件循环的并行代码。    
 ### QRunnable和QThreadPool 重用线程   
-经常创建和销毁线程代价比较巨大，而现有县城可以用于新任务，QThreadPool就是可重用的QThreads的集合。   
+经常创建和销毁线程代价比较巨大，而现有线程可以用于新任务，QThreadPool就是可重用的QThreads的集合。   
 每个Qt程序都有一个全局的线程池，通过QThreadPool::globalInstance()进行访问。此全局线程池根据CPU中的核心数目自动维护最佳线程数，但是同时可以显式的创建和管理单独的QThreadPool。   
 ### QtConcurrent 高级API   
 Qt Concurrent模块提供了处理一些常见的并行运算的高级函数：map、filter和reduce。和使用QThread和QRunnable不同，这些函数不需要使用低级线程的语言，例如互斥锁或者信号量。相反，他们需要返回一个QFuture对象，当它们准备就绪时，用于检索函数的结果。QFuture也可以用于查询并且暂停/恢复/取消计算。为了方便起见，QFutureWatcher通过信号与槽和QFutures进行交互。   

@@ -2540,4 +2540,16 @@ stack<string, vector<string>> str_stk;
 //str_stk2在vector上实现，初始化保存svec的拷贝
 stack<string, vector<string>> str_stk2(svec);
 ```    
-对于一个给定的适配器，可以
+对于一个给定的适配器，可以使用哪些容器时有限制的。所有适配器都要求容器有添加和删除元素的容器。因此，适配器不能构建在array上，类似的，我们也不能用forward_list来构造适配器，因为所有适配器都要去容器具有添加、删除以及访问尾元素的能力。stack只要求push_back、pop_back和back操作，因此可以使用除array和forward_list之外的任何容器来构造stack。queue适配器要求back、push_back、front和push_front，因此它可以构造于list或者deque之上，但是不能构造于vector之上。priority_queue除了front、push_back和pop_back操作之外还要求随机访问能力，因此它可以构造与vector或者deque之上，但是不能基于list构造。
+#### 栈适配器
+```
+stack<int> intStack;  //空栈
+//填满栈
+for (size_t ix = 0; ix != 10; ++ix)
+    intStack.push(ix);   //inStack保存10个数
+while (!inStack.empty()) {
+    int value = intStack.top();
+    //使用该值
+    intStack.pop();  //弹出栈顶元素，继续循环
+}
+```
