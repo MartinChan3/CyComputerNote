@@ -2819,8 +2819,196 @@ void fcn2()
     auto j = f2();  //j为0，f2保存v1的引用，而非拷贝
 }
 ````
-v1之前的&指出v1应该以引用的方式捕获，一个以引用方式捕获的变量与其他任何类型的引用类型类似。引用捕获与返回引用有着相同的问题和限制，如果我们采用引用方式捕获一个变量，就必须确保被引用的对象，就必须确保引用的对象在lambda执行的时候是存在的。lambda捕获的都是
-
+v1之前的&指出v1应该以引用的方式捕获，一个以引用方式捕获的变量与其他任何类型的引用类型类似。引用捕获与返回引用有着相同的问题和限制，如果我们采用引用方式捕获一个变量，就必须确保被引用的对象，就必须确保引用的对象在lambda执行的时候是存在的。lambda捕获的都是局部变量，这些变量在函数结束后就不复存在了。如果lambda可能在函数结束后执行，捕获的引用指向的局部变量已经消失。
+引用捕获有时候是有必要的，例如有时候我们希望biggies函数接受一个ostream的引用，用来输出数据，并接受一个字符作为分隔符：
+```
+void biggies(vector<string> &words,
+             vector<string>::size_type sz,
+             ostream &os = cout,
+             char c = ' ')
+{
+    //重排
+    for_each(words.begin(), words.end(),
+             [&os, c](const string &s){ os << s << c;});
+}
+```
+我们不能拷贝ostream对象，因此捕获os的唯一方法就是捕获其引用（或者指向os的指针）。
+当我们向一个函数传递传递一个lambda时，就像本例中调用for_each那样，lambda会立即执行。因为当for_each执行时，biggies中的变量是存在的。
+我们也可以从一个函数返回lambda，函数可以直接返回一个可调用对象，或者返回一个类对象，该类可能含有可调用对象的数据成员。如果函数返回一个lambda，则与函数不能返回一个局部变量的引用类似，次lambda也不能包含引用捕获。
+#### 隐式捕获
+除了显式列出我们希望使用的来自所在的函数的变量之外，还可以让编译器根据lambda体中的代码来推断我们要使用哪些变量。为了指示编译器推断捕获列表，应在捕获列表中写一个&或者=。&告诉编译器采用的捕获引用方式，=则表示采用值捕获的方式。例如，我们可以重写传递给find_if的lambda:
+```
+wc = find_if(words.begin(), words.end(),
+             [=](const string &s)
+             { return s.size() >=  sz;});
+```
+如果我们希望一部分变量采用值捕获，对其他变量采用引用捕获，可以混合使用隐式捕获和显示捕获：
+```
+void biggies(vector<string> &word,
+             vector<string>::size_type sz,
+             ostream &os = cout, char c = ' ')
+{
+    for_each(words.begin(), words.end(),
+             [&, c](const string &s){ os << s << c;}); //os隐式捕获，引用捕获方式，c显示捕获值捕获
+    for_each(words.begin(), words.end(),
+             [=, &os](const string &s){ os << s << c;}); //os显式捕获，引用捕获；c隐式捕获，值捕获方式
+}
+```
+注意，当混合使用隐式捕获和显式捕获，捕获列表中的第一个元素必须是&或=。此符号指定了默认捕获方式为引用或值。
+#### 可变lambda
+默认情况下，对于一个值被拷贝的变量，lambda表达式不会改变其值。如果我们希望能改变一个被捕获的变量的值，就必须在参数列表首加上关键字mutable。因此，可变lambda能省略参数列表：
+```
+void fcn3()
+{
+    size_t v1 = 42;  //局部变量
+    //f可以改变它所捕获的变量的值
+    auto f = [v1]()mutable{return ++v1;};
+    v1 = 0;
+    auto j = f(); //j为43
+}
+```
+一个引用捕获的变量是否可以修改依赖于此引用指向的是一个const类型还是一个非const类型：
+```
+void fcn4()
+{
+    size_t v1 = 42;  //局部变量
+    auto f2 = [&v1]{ return ++v1; }
+    v1 = 0;
+    auto j = f2();   //j为1
+}
+```
+#### 指定lambda返回类型
+到目前为止，我们所编写的lambda都只包含单一的return语句，因此我们还未遇到必须指定返回类型的情况。默认情况下，如果一个lambda体包含return之外的任何语句，则编译器假定此lambda返回void。与其它返回void函数的类似，被推断返回void的lambda不能返回值。
+下面给出一个简单的例子，我们可以使用标准库transform算法和一个lambda来将一个序列中每个负数来替换为其绝对值：
+```
+transform(vi.begin(), vi.end(), vi.begin(), [](int i){ return i < 0 ? -i : i; });
+```
+函数transform接受三个迭代器和一个可调用对象，前两个迭代器表示输入序列，第三个迭代器表示目的位置。算法对输入序列每个元素调用可调用对象，并将结果写到目的位置，如本例所示，目的位置迭代器和输入序列开始位置的迭代器可以是相同的。当输入迭代器和目的迭代器相同时，transform将输入序列中每个元素替换为可调用对象操作钙元素得到的结果。
+我们如果使用传统等价if的语句，而不指定返回类型（让lambda自动推断），就会产生编译错误：
+```
+transform(vi.begin(), vi.end(), vi.begin(),
+          [](int i){ if (i < 0) return -i; else return i;});
+```
+编译器推断这个lambda返回类型的void，但它返回了一个void。所以我们其实必须用尾置返回类型：
+```
+transform(vi.begin(), vi.end(), vi.begin(),
+          [](int i)-> int{ if (i < 0) return -i; else return i;});
+```
+### 10.3.4 参数绑定
+对于那种在一两个地方使用的简单操作，lambda表达式是最有用的。如果我们需要在很多地方使用相同的操作，通常应该定义一个函数，而不是多次编写相同的lambda表达式。类似的，如果一个操作需要很多语句才能完成，通常使用函数会更好。
+如果lambda的捕获列表为空，通常可以用函数来代替它。如前面章节所示，既可以用一个lambda，也可以用isShorter来实现vector中的单词按长度排序。类似的，对于打印vector内容的lambda，编写了一个函数来替换它也是很容易的事。这个函数只需要接受一个stirng并在标准输出上打印即可。
+但是，对于局部捕获的变量的lambda，用函数替换它就不是很容易了，例如我们用find_if调用中的lambda比较一个string和一个给定大小。我们可以很容易的编写一个完成相同工作的函数：
+```
+bool check_size(const string &s, string::size_type sz)
+{
+    return s.size() >= sz;
+}
+```
+但是，我们不能用这个函数作为find_if的一个参数，如前文所示，find_if接受一个一元谓词，因此传递给find_if的可调用对象必须接受单一参数。biggies传递给find_if的lambda使用捕获列表来保存sz。为了用check_size来代替此lambda，必须解决如何向sz形参传递一个参数的问题。
+#### 标准库bind函数
+我们可以解决向check_size传递一个长度参数的问题，方法是使用一个新的名为bind的标准库函数，它定义在头文件functional中，可以将bind函数看做一个通用的函数适配器，它接受一个可调用对象，生成一个新的可调用对象来**适应**原对象的参数列表，其一般的调用形式为：
+```
+auto newCallable = bind(callable, arg_list);
+```
+其中newCallable本身是一个可调用对象，arg_list是一个逗号分隔的参数列表，对应给给定的callable参数。即当调用newCallable时，newCallable会调用callable，并传递给它arg_list中的参数。
+arg_list中的参数可能包含形如_n的名字，其中n是一个整数，这些参数是“**占位符**”，表示newCallable的参数，它们占据了传递给newCallable参数的“位置”。数值n表示生成的可调用对象中参数的位置：_1为newCallable的第一个参数，_2为第二个参数，以此类推。
+#### 绑定check_size的sz参数
+作为一个简单的例子，我们将使用bind生成一个调用check_size的对象，如下所示，它用一个定值作为其大小参数来调用check_size:
+```
+//check6是一个可调用对象，接受一个string类型的参数
+//并用此string和值6来调用check_size
+auto check6 = bind(check_size, _1, 6);
+```
+此bind调用只有一个占位符，表示check6只接受单一参数。占位符出现在arg_list的第一个位置，表示check6的此参数应对check_size的第一个参数。此参数是一个const string&。因此调用check6必须传递给它一个string类型的参数，check6会将此参数传递给check_size。
+```
+string s = "hello";
+bool b1 = check6(s);  //check6(s)会调用check_size(s, 6)
+```
+我们就可将原来基于lambda的bind_if的调用替换为使用check_size的版本：
+```
+auto wc = find_if(words.begin(), words.end(), bind(check_size, _1, sz));
+```
+此bind调用生成一个可调用对象，将check_size将第二个参数绑定到sz值。当find_if对words中的string调用这个对象时，这些对象会调用check_size，将给定的string和sz传递给它。因此find_if可以有效地对输入序列中每个string调用check_size，实现string的大小与sz的比较。
+#### 使用placeholder名字
+名字_n都定义在一个名为placeholder的命名空间，而这个命名空间本身定义在std命名空间中。为了这些使用名字，两个命名空间都要写上。与我们其他例子类似，对bind的调用代码假定之前已经恰当使用了using声明。例如，_1对应的using的声明为：
+```
+using std::placeholders::_1;
+```
+此声明说明我们要使用名字_1定义在命名空间placeholders中，而此命名空间有定义在命名空间std中。
+对每个占位符名字，我们都必须提供一个单独的using声明。编写这样的生命很麻烦，也很容易出错。可以使用另外一种不同形式的using语句，而不是分别声明每个占位符，如下所示：
+```
+using namespace namespace_name;
+```
+这种形式说明希望所有来自namespace_name的名字都可以在我们的程序中使用，例如：
+```
+using namespace std::placeholders;
+```
+是的由placeholders定义的所有名字都可用，与bind函数一样，placeholders命名空间也定义在functional头文件中。
+#### bind的参数
+如前文所述，我们可以用bind修正参数的值，更一般的可以用bind绑定给定可调用对象中的参数或重新安排其顺序。例如，假定f是一个可调用对象，它有5个参数，则下面对bind的调用：
+```
+auto g = bind(f, a, b, _2, c, _1);
+```
+生成一个新的可调用对象，它有两个参数，分别用占位符_2和_1表示。这个新的可调用对象将它自己的参数作为第三个和第五个参数传递给f。f的第一个、第二个和第四个参数分别被绑到给定的值a、b和c中。
+传递给g的参数按位置绑定到占位符，即第一个参数绑定到_1，第二个参数绑定到_2。因此我们调用g时，其中一个参数将被传递给f作为最后一个参数，第二个参数将被传递给f作为第三个参数。实际上，这个bind调用会将``g(_1, _2)``映射为``f(a, b, _2, c, _1)``
+#### 用bind重排参数顺序
+这算是活用bind颠倒isShorter的含义：
+```
+sort(words.begin(), words.end(), isShorter);  //按单词长度由短至长排列
+sort(words.begin(), words.end(), bind(isShorter, _2, _1));  //由长至短
+```
+在第一个调用中，当sort需要比较两个元素A和B时，它会调用isShorter(A, B)。在第二个对sort的调用中，传递给isShorter的参数被交换过来了，因此当sort比较两个元素时，就好像调用isShorter(B, A)一样。
+#### 绑定引用参数
+例如ostream经常会遇到为了替换一个引用方式捕获ostream的lambda：
+```
+for_each(words.begin(), words.end(), [&os, c](const string &s){ os << s << c;});
+```
+可以很容易的编写一个函数，完成相同的工作：
+```
+ostream &print(ostream &os, const string &s, char c)
+{
+    return os << s << c;
+}
+```
+但是，不能直接用bind来代替对os的捕获：
+```
+for_each(words.begin(), words.end(), bind(print, os, _1, ' '));
+```
+原因在于bind拷贝其参数，而我们不能拷贝一个ostream。如果我们希望传递给bind一个对象而不拷贝它，就必须使用标准库ref函数：
+```
+for_each(words.begin(), words.end(), bind(print, ref));
+```
+函数ref返回一个对象，包含给定的引用。此对象是可以拷贝的。标准库中还有一个cref函数，生成一个保存const引用的类。与bind一样,函数ref和cref也定义在头文件functional中。
+> 向后兼容：参数绑定
+> 旧版本的C++提供的绑定函数参数语言特性限制更多，也更复杂。标准库定义了两个分别名为bind1st和bind2nd的函数。类似bind,这两个函数接受一个函数作为参考，生成一个新的可调用对象，该对象调用给定函数，并将绑定的参数传递给它。但是这些函数分别只能绑定第一个或者第二个参数。由于这些函数局限性太强，在新标准中已经被弃用(deprecated)。所谓被弃用的特性在新版本不再支持的特性，新的C++程序应该使用bind。
+## 10.4 再谈迭代器
+除了每个容器定义的迭代器外，标准在头文件iterator中还定义了额外几种迭代器。这些迭代器包括以下几种。
+- 插入迭代器(insert iterator):这些迭代器被绑定到一个容器上，可用来向容器插入元素。
+- 流迭代器(stream iterator):这些迭代器被绑定到输入和输出流上，可以用来遍历所关联的IO流。
+- 反向迭代器(reverse iterator):这些迭代器向后而不是向前移动，除了forward_list之外的标准容器库都有反向迭代器。
+- 移动迭代器(move iterator):这些专用的迭代器不是拷贝其中的元素，而是为了移动他们。他们将会在后面介绍移动迭代器。
+### 10.4.1 插入迭代器
+插入器是一种迭代器适配器，它接受一个容器，生成一个迭代器，能实现向给定容器添加元素。当我们通过一个插入迭代器进行赋值，该迭代器调用容器操作来向给定容器的指定位置插入一个元素。
+> it = t:在it指定的当前位置插入t。类似调用原函数的push_back、push_front、insert
+> *it、++it、it++:这些操作虽然存在，但是不会做任何事情，**每个操作都会返回it**
+插入器有三种类型，差异在于元素插入的位置：
+- back_inserter:创建一个push_back的迭代器；
+- front_inserter:创建一个push_front的迭代器；
+- inserter:创建一个insert的迭代器。此函数接受第二个参数，这个参数必须是一个指向给定容器的迭代器。元素江北插入到给定跌大气所表示的元素之前。
+理解插入器的工作过程很重要：当调用inserter(c, iter),得到一个迭代器，那么``*it = val;``过程等价于
+```
+it = c.insert(it, val); //it指向新加入的元素
+++it; //递增it使它指向原来的元素
+```
+front_inserter生成的迭代器行为和inserter的行为完全不一样,当我们使用front_inserter时，元素总是插入到容器第一个元素之前。即使我们传递给inserter的位置原来指向第一个元素，只要我们在此元素之前插入一个新元素，此元素就不会是容器首元素了：
+```
+list<int> lst = {1, 2, 3, 4};
+list<int> lst2, lst3;
+copy(lst.cbegin(), lst.cend(), front_inserter(lst2));  //lst2:4, 3, 2, 1
+copy(lst.cbegin(), lst.cend(), inserter(lst3, lst3.begin())); //lst3: 1, 2, 3, 4
+```
+### 10.4.2 iostream迭代器
+虽然iostream类型不是容器
 
 
 
