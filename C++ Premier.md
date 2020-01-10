@@ -3145,11 +3145,416 @@ C++标准指明了泛型和数值算法每个迭代器参数的最小类别。�
 **前向迭代器**(forward iterator):可以读写元素，这类迭代器只能在序列沿一个方向移动。前向迭代器支持所有输入和输出迭代器的操作，而且可以多次读写同一个元素。因此我们可以保存前向迭代器的状态。因此，我们可以保存前向迭代器的状态，使用前向迭代器的算法可以对序列进行多遍扫描。算法replace要求前向迭代器，forward_list上的迭代器是前向迭代器。
 **双向迭代器**(bidirectional iterator):可以正向/反向读写顺序中的元素。除了支持所有前向迭代器的操作之外，双向迭代器还支持前置和后置递减运算符(--)。算法reverse要求双向迭代器，除了forward_list之外，其他标准库都提供符合双向迭代器要去的迭代器。
 **随机访问迭代器**(random-access iterator):提供在常量时间内访问序列中任意元素的能力，此类迭代器支持双向迭代器的所有功能，此外还应该支持：
-- 用于比较两个iterator
+- 用于比较两个iterator相对位置的关系运算符(<、<=、>=和>)
+- 迭代器和一个整数值的加减(+、+=、-和-=)，计算结果是迭代器在序列中前进（或后退）给定整数个元素后的位置。
+- 用于两个迭代器上的减法运算符(-)，得到两个迭代器的距离
+- 下标运算符(iter[n])，与(*iter[n])等价
+算法sort要求随机访问迭代器。array、deque、string和vector的迭代器都是随机访问迭代器，用于访问内置数组元素的指针也是。
+### 10.5.2 算法形参模式
+在任何算法分类之上，还有一组参数规范。理解这些参数规范对学习新算法很有帮助——通过理解参数的含义，你可以将注意力集中在算法所做的操作上。大多数算法具有如下四种形式之一：
+```
+alg(beg, end, other args);
+alg(beg, end, dest, other args);
+alg(beg, end, beg2, other args);
+alg(beg, end, beg2, end2, other args);
+```
+其中alg是算法的名字，beg和end表示算法所操作的输入范围。几乎所有算法都接受一个输入范围，是否有其他参数依赖于要执行的操作。这里列出了最常见的一种——dest、beg2和end2，都是迭代器参数。顾名思义，如果用到了这些迭代器参数，它们分别承担指定目的和第二个范围的角色。除了这些迭代器参数，一些算法还接受额外的、非迭代器的特定参数。
+#### 接受单个目标迭代器的算法
+dest参数是一个表示算法可以写如的目的位置的迭代器。算法假定(assume)：按其需要写入数据，不管写入多少元素都是安全的。
+> warning：向输出迭代器写入数据的算法都假定目标空间足够容纳写入的数据。
+如果dest是一个直接指向容器的迭代器，那么算法将输出数据写到容器中已存在的元素内。更常见的情况是，dest被绑定到一个插入迭代器或者是一个ostream_iterator。插入迭代器会将新元素添加到容器中，因而保证空间是足够的。ostream_iterator会将数据写入到一个输出流，同样不管要写入多少元素都没有问题。
+#### 接受第二个输入序列的算法
+接受单独的beg2或是接受beg2和end2的算法用这些迭代器表示第二个输入范围。这些算法通常使用第二个范围中的元素与第一个输入范围结合来进行一些运算。
+如果一个算法接受beg2和end2，这两个迭代器表示第二个范围。这类算法接受两个完整指定的范围：[beg, end)表示的范围和[beg2, end2)表示的第二个范围。
+只接受单独的beg2(不接受end2)的算法将beg2作为第二个输入范围中的首元素。此范围的结束位置未指定，这些算法假定从beg2开始的范围与beg和end所表示的范围至少一样大。
+> warning：接受单独beg2的算法假定从beg2开始的序列与beg和end所表示的范围至少一样大。
+### 10.5.3 算法命名规范
+除了参数规范，算法还需要遵循一套命名和重载规范，这些规范处理注入：如何提供一个操作代替默认的<或==运算符以及算法是将输出数据写入输入序列还是一个分离的目的位置等问题。
+#### 一些算法使用重载形式传递一个谓词
+接受谓词参数来代替<或==运算符的算法，以及那些不接受额外参数的算法，通常都是重载的函数。函数的一个版本用元素类型的运算符来比较元素；另一个版本接受一个额外谓词参数，来代替<或者==:
+```
+unique(beg, end);         //使用==运算符比较元素
+unique(beg, end, comp);   //使用comp比较元素
+```
+两个调用都重新整理给定序列，将相邻的重复元素删除。第一个调用使用元素类型的==运算符来检查重复元素；第二个则调用comp来确定两个元素是否相等。由于两个版本的函数在参数个数上不相等，因此具体应该调用哪个版本都不会产生歧义。
+#### _if版本的算法
+接受一个元素值的算法通常有另一个不同名（不是重载的）版本，该版本接受一个谓词代替元素。接受谓词参数的算法都有附加_if前缀：
+```
+find(beg, end, val);      //查找val第一次出现的位置
+find_if(beg, end, pred);  //查找第一个令pred为真的元素
+```
+这两个算法都在输入范围中查找特定元素第一次出现的位置。算法find查找一个指定值，算法find_if查找使得pred返回非零值的元素。
+这两个算法提供了命名上的差异的版本，而非重载版本，因为两个版本的算法都接受相同数目的参数。因此可能产生重载歧义，虽然很罕见，但是为了避免任何可能的歧义，标准库选择提供不同名字的版本而不是重载。
+#### 区分拷贝元素的版本和不拷贝的版本
+默认情况下，重排元素的算法将重排后的元素写回给定的输入序列中。这些算法还提供另一个版本，将元素写到一个指定的输出目的位置。如我们所见，写到额外目的空间的算法都在名字后面附加一个copy，例如：
+```
+reverse(beg, end);              //翻转输入范围中元素顺序
+reverse_copy(beg, end, dest);   //将元素按逆序拷贝到dest
+```
+一些算法同时提供_copy和_if版本，这些版本接受一个目的位置迭代器和一个谓词：
+```
+remove_if(v1.begin(), v1.end(), [](int i){ return i % 2;}); //从v1中删除奇数元素
+remove_copy_if(v1.begin(), v1.end(), back_inserter(v2), [](int i){ return i % 2; });
+```
+两个算法都调用了lambda来确定元素是否为奇数。在第一个调用中，我们从输入序列中将奇数元素删除。在第二个调用中，我们将非奇数元素考入到v2中。
+## 10.6 特定容器算法
+与其它容器不同，链表类型list和forward_list定义了几个成员函数形式的算法。特别是，它们定义了独有的sort、merge、remove、reverse和unique。通用版本的sort要求随机访问迭代器，因此不能用于list和forward_list，因为这两个类型分别提供双向迭代器和前向迭代器。
+链表类型定义的其他算法的通用版本可以用于链接，但代价太高。这些算法需要交换输入序列中的元素。一个链表可以通过改变元素间的链接而不是真的交换它们的值来快速交换元素。因此，这些链表版本的算法的性能比对应的通用版本好得多。
+> Advice：对于list和forward_list，应该优先使用成员函数版本算法而不是通用算法。
+#### splice成员
+lst.splice(args)或flst.splice_after(args)。p是一个指向lst中元素的迭代器，或者一个指向flst首前位置的迭代器。函数将lst2的所有元素移动到lst中p之前的位置或者flst中p之后的位置。将元素从lst2中删除。lst2的类型必须与lst或者flst相同，且不能是同一个链表。
+#### 链表特有的操作会改变容器
+多数链表特有的算法都与其同样版本很相似，但不完全相同。这个很容易理解，就是例如merge函数会将合并的序列销毁，来自两个链表中的元素依然存在，但是它们都已经在同一个链表中。
 
+# 第11章 关联容器
+关联容器和顺序容器有着根本的不同：关联容器中的元素是按照关键字来保存和访问的。与之相对的是，顺序容器中的元素是按照它们在容器中的位置来顺序保存和访问的。
+虽然关联容器很多行为与顺序容器相同，但其不同之处反映了关键字的作用。
+两个最主要的**关联容器**类型map和set。map中的元素是一些关键字-值(key-value)对，关键字起到索引的作用，值则表示与索引关联的数据。set中每个元素只包含一个关键字，set支持高校的关键字查询操作——检查一个给定关键字是否在set中。例如在某些文本处理过程中，可以用set来保存想要忽略的单词。字典就是一个很好的map的例子，可以将单词作为关键字，将单词释义作为值。
+标准库提供了8个关联容器：
+**按关键字有序保存元素**
+- map 关联数组：保存关键字-值对
+- set 关键字即值，即只保存关键字的容器
+- multimap 关键字可重复出现的map
+- multiset 关键字可重复出现的set
+**无序集合**
+- unordered_map 用哈希函数组织的map
+- unordered_set 用哈希函数组织的set
+- unordered_multimap 哈希组织的map:关键字可以重复出现
+- unordered_multiset 哈希组织的set:关键字可以重复出现
+这8个容器不同体现在：1）是否为map或者set;2）是否允许重复关键字；3）按顺序或者无序保存。允许重复关键字名字中包含单词multi；不保持关键字按顺序存储的容器名字都以单词unordered开头。因此一个unordered_multi_set是一个允许重复关键字，元素无需保存的集合，而一个set则是一个要求不重复关键字，有序存储的集合。无序容器使用哈希函数来组织元素，我们将在后面介绍关于哈希函数的内容。
+类型map和multimap定义在头文件map，set和multiset定义在头文件set中；无序容器则定义在头文件unordered_map和unordered_set中。
+## 11.1 使用关联容器
+一个景点的使用关联数组的例子是单词计数程序：
+```
+map<string, size_t> word_count;   //string到size_t的空map
+string word;
+while (cin >> word)
+    ++word_count[word];           //提取word计数器并加1
+for (const auto &w : word_count)
+    cout << w.first << " occurs " << w.second << ((w.second > 1) ? " times" : " time") << endl;
+```
+当从map中提取一个元素时，会得到一个pair类型的对象，我们将会在后文介绍它。简单来说pair是一个末班类型，保存了两个名为first和second的(公有)数据成员。map所使用的pair用first成员保存关键字，用second成员保存对应的值。因此，输出语句的效果是打印每个单词及其关联的计数器。
+#### 使用set
+例如想要忽略一些常见单词，则可以用set保存想忽略的单词，只对不在集合中的单词统计出现次数：
+```
+map<string, size_t> word_count;
+set<string> exclude = {"The", "A", "But", "Or"};
+string word;
+while (cin >> word)
+{
+    if (exclude.find(word) == exclude.end())
+        ++word_count[word];
+}
+```
+与其它容器类似，set也是模板。为了定义一个set，必须指定其元素类型，本例中是string。
+## 11.2 关联容器概述
+关联容器不支持顺序容器的位置相关的操作，例如push_back或者push_front，原因是关联容器中元素是根据关键字存储的，这些操作对关联容器没有意义。而且，关联容器不支持构造函数或插入操作这些接受一个元素值和一个数量值的操作。
+除了与顺序容器相同的操作外，关联容器还支持一些顺序容器不支持的操作和类型别名。此外无序容器还提供一些用来调整哈希性能的操作。关联容器的迭代器都是**双向的**。
+### 11.2.1 定义关联容器
+每个关联容器都定义了一个默认构造函数，它创建一个指定类型的空容器。我们可以将关联容器初始化为另一个同类型容器的拷贝，或是从一个值范围来初始化关联容器，只要这些值可以转化为容器所需类型就可以。在新标准下，我们可以对关联容器进行值初始化：
+```
+map<string, size_t> word_count; //空容器
+set<string> exclude = {"the", "but", "and"};
+map<string, string> authors = { {"Dickens", "Charles"},
+                                {"Austen", "Jane"},
+                                {"Joyce", "James"} };
+```
+#### 初始化multimap或者multiset
+一个map或者set中的关键字必须是唯一的，即对于一个给定的关键字，只能由一个元素的关键字等于它。容器multimap和multiset没有此限制，它们都允许多个元素具有关键字。流入在我们用来统计单词数量的map中，每个单词只能有一个元素。另一方面，在一个词典中，一个特定单词则具有多个与之关联的词义。
+下面的例子展示了具有唯一关键字的容器与允许重复关键字的容器之间的区别。首先我们创建ivec的保存int的vector，它包含20个元素：0到9每个整数有两个拷贝，我们将使用此vector初始化一个set和一个multiset：
+```
+vector<int> ivec;
+for (vector<int>::size_type i = 0; i != 10; ++i) {
+    ivec.push_back(i);
+    ivec.push_bakc(i);
+}
+set<int> iset(ivec.cbegin(), ivec.cend());
+multiset<int> miset(ivec.cbegin(), ivec.cend());
+cout << ivec.size() << endl;   //打印出20
+cout << ivec.size() << endl;   //打印出10
+cout << miset.size() << endl;  //打印出20
+```
+### 11.2.2 关键字类型的要求
+关联容器对关键字类型有一定的限制。对于无序容器中关键字的要求后文会介绍。对于有序容器——map/multimap/set/multiset，关键字类型必须定义元素比较的方法。默认情况下，标准库使用关键字类型的<运算符来比较两个关键字。在集合类型中，关键字类型就是元素类型；在映射类型中，关键字类型是元素的第一部分的类型，因此11.2节中word_count的关键字类型是string，exclude的也是。
+#### 有序容器的关键字类型
+可以向一个算法提供我们定义的比较操作，与之类似，也可以提供自己定义的操作来代替关键字上的<运算符。所提供的操作必须在关键字类型上定义一个**严格弱序**。可以将严格弱序看做小于等于，虽然实际定义的操作可能是一个复杂的函数，但是无论我们怎样定义比较函数，它必须具备如下基本形式：
+- 两个关键字不能同时“小于等于”对方；如果k1“小于等于”k2，那么k2绝不能“小于等于”k1。
+- 如果k1"小于等于"k2,且k2"小于等于"k3,那么k1必须小于k3.
+- 如果存在两个关键字，任何一个都不“小于等于”另一个，那么我们称这两个关键字是“等价”的。如果k1等价于k2，且k2等价于k3，那么k1必须等价于k3;
+如果两个关键字时等价的，那么容器将它们视作相等处理。当用作map的关键字时，只能有一个元素与这两个关键字关联，我们可以用两者中任意一个访问对应的值。
+> 在实际编程中，重要的是如果一个类型定义了“行为正常”的<运算符，则它可以用作关键字类型
+#### 使用关键字类型的比较函数
+用来组织一个容器中的元素的操作类型也是该容器类型的一部分。为了指定使用自定义的操作，必须在定义关联容器类型时提供此操作的类型。如前所述，用尖括号指出要定义哪种类型的容器，自定义的操作类型必须在尖括号中紧跟着元素类型给出。
+在尖括号中出现的每个类型，就仅仅是一个类型而已。**当我们创建一个容器(对象)时，才会以构造函数参数的形式提供真正的比较操作（其类型必须与在尖括号中指定的类型相吻合）**。
+例如，我们不能直接定义一个Sales_data的multiset，因为Sales_data没有<运算符。但是可以compareIsbn函数来定义一个multiset。次函数在Sales_data对象的ISBN成员上定义了一个严格弱序。函数compareIsbn应该像下面定义：
+```
+bool compareIsbn(const Sales_data &lhs, const Sales_data &rhs)
+{
+    return lsh.isbn() < rhs.isbn();
+}
+```
+为了使用自己定义的操作，在定义multiset时我们必须提供两个类型：关键字类型Sales_data，以及比较操作类型——应该是一种函数指针类型，可以指向compareIsbn，当定义此容器类型的对象时，需要提供想要使用的操作的指针。在本例中，我们提供一个指向compareIsbn的指针：
+```
+//bookstore中多条记录可以有相同的ISBN
+//bookstore中元素以ISBN的顺序进行排列
+multiset<Sales_data, decltype(compareIsbn)*> bookstore(compareIsbn);
+```
+此处，我们使用decltype来指出自定义自定义操作的类型，记住，**当用decltype来获得一个函数指针类型时，必须加上一个*来指出我们要使用一给定函数类型的指针**。用compareIsbn来初始化bookstore对象，这表示当我们向bookstore添加元素时，通过调用compareIsbn为这些元素排序，可以用compareIsbn代替&compareIsbn作为构造函数的参数，因为当我们使用一个函数的名字时，在需要的情况下它会自动转化为一个指针。当然，使用&compareIsbn的效果是一样的。
+### 11.2.3 pair类型
+在介绍关联容器操作之前，我们需要了解名为pair的标准库类型，它定义在头文件utility中。
+一个pair保存两个数据成员。类似容器，pair是一个用来生成特定类型的模板。当创建一个pair时，我们必须提供两个类型名，pair的数据成员将具有对应的类型，两个类型不要求一样：
+```
+pair<string, string> anon;
+pair<string, size_t> word_count;
+pair<string, vector<int>>  line;
+```
+pair的默认构造函数对数据成员进行值初始化，当然我们还可以为每个成员提供初始化器：
+```
+pair<string, string> author { "James", "Joyce"};
+```
+与其它标准库不同，pair的数据成员是public的，两个成员分别命名为first和second。我们用普通的成员访问它们就可以。
+pair提供的几个操作很有限，除了上面调用first、second之外，就只有make_pair(v1, v2)来构建一个pair，类型从v1，v2自动推断而来。
+#### 创建pair对象的函数
+想象有一个函数需要返回一个pair，在新标准下，我们可以对返回值进行列表初始化
+```
+pair<string, int> process(vector<string> &v)
+{
+    //处理v
+    if (!v.empty())
+        return {v.back(), v.back().size()};    //列表初始化
+    else
+        return pair<string, int>();            //隐式构造返回值
+}
+```
+早期的C++中因为不接受花括号的初始化方式，所以必须显式的构造返回值：
+```
+if (!v.empty())
+    return pair<string, int>(v.back(), v.back().size());
+```
+或者使用make_pair来显式构造：
+```
+if (!v.empty())
+    return make_pair(v.back(), v.back().size());
+```
+## 11.3 关联容器操作
+除了列出的类型，关联容器还定义了以下类型别名：
+- key_type       此容器类型的关键字类型
+- mapped_type    每个关键字关联的类型；只适用于map
+- value_type     对于set,与key_type相同；对于map，为pair<const key_type, mapped_type>，这一点有一些特殊
+```
+set<string>::value_type v1;   //v1是一个string
+set<string>::key_type   v2;   //v2是一个string
+map<string, int>::value_type  v3;    //v3是一个pair<const string, int>，这一点要注意
+map<string, int>::key_type    v4;    //v4是一个string
+map<string, int>::mapped_type v5;    //v5是一个int
+```
+### 11.3.1 关联容器迭代器
+当解引用一个关联容器迭代器，我们会得到一个类型为value_type的值的引用。对map而言，value_type是一个pair类型，其first成员保存const关键字，second成员保存值：
+```
+auto map_it = word_count.begin();   //获得指向word_count中一个元素的迭代器
+//*map_it是指向一个pair<const string, size_t>对象的引用
+cout << map_it->first;              //打印此元素的关键字
+cout << " " << map_it->second;      //打印此元素的值
+map_it->first = "new key";          //错误：关键字是const的
+++map_it->second;                   //正确
+```
+> Note:简单来说就是必须记住，一个map的value_type是一个pair，我们可以改变pair的值，但是不能改变关键字成员的值。
+#### set的迭代器是const的
+虽然set类型同时定义了iterator和const_iterator类型，但两种类型都只允许只读访问set中的元素。与不能改变一个map元素的关键字一样，一个set中的关键字也是const的。可以用一个set迭代器来读取元素的值，但是不能修改：
+```
+set<int> iset = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+set<int>::iterator set_it = iset.begin();
+if (set_it != iset.end()) {
+    *set_it = 42;             //错误：set中的关键字时只读的
+    cout << *set_it << endl;  //正确：可以读关键字
+}
+```
+#### 遍历关联容器
+map和set类型都支持begin和end操作。与往常一样，我们可以用这些函数获取迭代器，然后用迭代器来遍历容器。例如，我们可以编写一个循环来打印先前单词计数程序的结果：
+```
+auto map_it = word_count.cbegin();
+while (map_it != word_count.cend()) {
+    cout << map_it->first  << " occurs"
+         << map_it->second << " times" << endl;
+    ++map_it;
+}
+```
+#### 关联容器和算法
+我们通常不用关联容器使用泛型算法。关键字是const这一特性意味着不能将关联容器传递给修改或者重排容器元素的算法，因为这类算法需要向元素写入值，而set类型中的元素是const的，map中的元素是pair，但是第一个成员是const的。
+关联容器可用于只读取元素的算法。但是很多这类算法都要搜索序列，由于关联容器中的元素不能通过它们的关键字进行（快速）查找，因此对其使用泛型搜索算法几乎总是坏主意。例如关联容器的定义了一个名为find的成员，它通过一个给定的关键字直接获取元素。我们可以用泛型的find算法来寻找一个元素，但是此算法会进行顺序搜索。使用关联容器定义的专用的find成员会比调用find快得多。
+在实际编程中，如果我们真要对一个关联容器使用算法，要么是将它作为一个源序列，要么当做一个目的位置。例如可以用泛型copy算法将元素从一个关联容器拷贝到另一个序列。类似的，可以调用inserter将一个插入器绑定到一个关联容器。通过使用inserter，我们可以将关联容器当做一个目的位置来调用另一个算法。
+### 11.3.2 添加元素
+关联容器的insert成员向容器添加一个元素或一个元素范围。由于map和set包含不重复的关键字，因此插入一个已存在的元素对容器没有影响：
+```
+vector<int> ivec = {2, 4, 6, 7, 2, 4, 6, 8};
+set<int> set2;
+set2.insert(ivec.cbegin(), ivec.cend());  //set2有4个元素
+set2.insert({1, 3, 5, 7, 1, 3, 5, 7});    //set2现在有8个元素
+```
+insert有两个版本，分别接受一对迭代器，或是一个初始化器列表，这两个版本的行为类似对应的构造函数——对于一个给定的关键字，只有第一个带此关键字的元素才会被插入到容器中。
+#### 向map添加元素
+对一个map进行insert操作时，必须记住元素类型是一个pair:
+```
+word_count.insert({word, 1});
+word_count.insert(make_pair(word, 1));
+word_count.insert(pair<string, size_t>(word, 1));
+word_count.insert(map<string, size_t>::value_type(word, 1));
+```
+#### 检测insert的返回值
+insert(或emplace)返回的值依赖于容器类型和参数，对于不包含重复关键字的容器，添加单一元素的insert和emplace版本返回一个pair，告诉我们插入操作是否成功。pair和first成员是一个迭代器，指向具有给定关键字的元素；second成员是一个bool值，指出元素是插入成功还是已经存在于容器中。如果关键字已在容器中，则insert什么事情也不做，且返回值中的bool部分为false。如果关键字不存在，元素被插入容器中，且bool值为true。
+我们就可以重写单词计数函数：
+```
+//统计每个单词在输入中出现次数的一种更繁琐的方法
+map<string, size_t> word_count;    //从string到size_t的空map
+string word;
+while (cin >> word) {
+    //插入一个元素，关键字等于word，值为1
+    //若word已在word_count中，insert什么也不做
+    auto ret = word_count.insert({word, 1});
+    if (!ret.second)          //word已在word_count中
+        ++ret.first->second;  //递增计数器
+}
+```
+最难理解的``++((ret.first)->second)``,加上括号可以更好理解一些。当然，如果采用老版本的编译器，ret写起来就有点麻烦：
+```
+pair<map<string, size_t>::iterator, bool> ret = word_count.insert(make_pair(word, 1));
+```
+#### 向multiset或multimap添加元素
+我们单词计数程序依赖这样一个事实：一个给定的关键字只能出现一次。这样任意给定的单词只有一个关联的计数器，我们有时候希望能够添加具有相同关键字的多个元素。例如可能想建立作者到他所著书籍题目的映射。在此情况下，每个作者可能有多个条目，因此我们应该使用multimap而不是map。由于一个multi容器中的关键字不必唯一，在这些类型上调用insert总会插入一个元素：
+```
+multimap<string, string> authors;
+authors.insert({"Barth, John", "Sot-Weed Factor"});
+authors.insert({"Barth, John", "Lost in the Funhouse"});
+```
+对允许重复关键字的容器，接受单个元素的insert操作返回一个指向一个指向新元素的迭代器。这里无须返回一个bool值，因为insert总是向这类容器中加入一个新元素。
 
+### 11.3.3 删除元素
+关联容器定义了三个版本三个版本的erase。与顺序容器一样，我们可以通过传递给erase一个迭代器或一个迭代器对来删除一个元素或者一个元素范围。这两个版本的erase与对应的顺序容器的操作非常相似：指定的元素被删除，函数返回void。
+关联容器提供一个额外的erase操作，它接受一个key_type参数。此版本删除所有匹配给定关键字的元素（如果存在的话），返回实际删除的元素的数量。我们可以用词版本在打印结果之前从word_count中删除一个特定的单词：
+```
+//删除一个关键字，返回删除的元素数量
+if (word_count.erase(removal_word))
+    cout << "ok: " << removal_word << "removed\n";
+else
+    cout << "oops: " << removal_word << " not found!\n";
+```
+对于保存不重复关键字的容器，erase的返回值总是0和1。若返回值为0，则表明要删除的元素并不在容器中，对于允许重复关键字的容器，删除元素的数量可能大于1：
+```
+auto cnt = authors.erase("Barth, John");  //cnt = 2
+```
+map和unordered_map容器提供了下标运算符和一个对应的at函数，set类型不支持下标，因为set中没有与关键字相连的“值”，元素本身就是关键字，因此，获取一个与关键字相关联的值的操作就没有意义了。我们不能对一个multimap或一个unordered_multimap进行下标操作，因为这些容器中可能有多个值与一个关键字关联。
+类似我们用过的其他下标运算符，map下标运算符接受一个索引来获取与此关键字相关联的值。但是与其他下标运算符不同的是，如果关键字并不在map中，会为它创建一个元素并插入到map中，关联至将进行值初始化。
+例如，如果我们编写如下代码：
+```
+map<string, size_t> word_count;
+word_count["Anna"] = 1;
+```
+就会一口气插入一个"Anna"并且将值1赋予它。
+#### 使用下标操作的返回值
+map的下标运算符与我们用过其他的下标运算符的拎一个不同之处是其返回类型。通常情况，解引用一个迭代器所返回的类型与下标运算符返回的类型是一样的。但是对map有点不同，当对一个map进行下标操作时，会获得一个mapped_type对象；但当解引用一个map迭代器，会得到一个value_type对象。
+与其它下标运算符相同的是，map的下标运算符返回一个左值。由于是返回一个左值，所以我们既可以读也可以写元素：
+```
+cout << word_count["Anna"];  //用Anna作为下标提取元素,会打印出1
+++word_count["Anna"];        //提取元素，将其增1
+cout << word_count["Anna"];  //提取元素并打印它，会打印出2
+```
+如果有时候只是想知道一个元素是否已在map中，但在不存在时不想添加元素，在这种情况下，就不能使用下标运算符。
+### 11.3.5 访问元素
+访问元素有很多方法：
+- c.find(k)    返回一个迭代器，指向第一个关键字为k的元素，若k不在容器中，则返回尾后迭代器；
+- c.count(k)   返回关键字等于k的元素的数量。对于不允许重复关键字的容器，返回值永远0或1
+- c.lower_bound(k)   返回一个迭代器，指向第一个关键字不小于k的元素
+- c.upper_bound(k)   返回一个迭代器，指向第一个关键字大于k的元素
+- c.equal_range(k)   返回一个迭代器pair，表示关键字等于k的元素范围，若k不存在，则pair的两个成员均等于c.end()
+#### 在multimap或者multiset中查找元素
+在一个不允许重复关键字的关联容器中查找一个元素是一件很容易的事情。但是对于允许重复关键字的容器来说，这种过程更为复杂：在容器中可能有很多元素具有给定的关键字。如果一个multimap或者multiset中有多个元素具有给定关键字，则这些元素在容器中会相邻存储。
+例如，给定一个从作者到著作题目的映射，我们可能想打印一个特定作者的所有著作。可以用三种不同方法来解决这个问题。最直观的方法是使用find和count:
+```
+string search_item("Alain de Botton");
+auto entries = authors.count(search_item);
+auto iter = authors.find(search_item);
+while(entries) {
+    cout << iter->second << endl;l
+    ++iter;
+    --entries;
+}
+```
+首先调用count确定此作者共有多少本著作，并调用find获得一个迭代器，指向第一个关键字为此作者的元素。for循环的迭代次数依赖于count的返回值。特别是如果count返回0，则循环一次也不执行。
+#### 一种不同的，面向迭代器的解决方法
+我们可以用lower_bound和upper_bound来解决此问题。这两个惭怍都会接受一个关键字，返回一个迭代器。如果关键字在容器中，lower_bound返回的迭代器将指向第一个具有给定关键字的元素，而upper_bound返回的迭代器则指向最后一个匹配给关键字的元素之后的位置。如果元素不在multimap中，则lower_bound和upper_bound会返回相等的迭代器——指向一个不影响排序的关键字插入位置。
+> lower_bound返回的迭代器可能指向一个具有给定关键字的元素，但也可能不指向。如果关键字不在容器中，**则lower_bound会返回关键字的第一个安全插入点——不影响容器中元素顺序的插入位置**。
+使用这两个操作，我们可以重写前面的程序：
+```
+for (auto beg = authors.lower_bound(search_item),
+          end = authors.upper_bound(search_item);
+     beg != end; ++beg)
+     cout << beg->second << endl;  //打印每个题目
+```
+#### equal_range函数
+这个方法是最干脆的，直接调用equal_range即可，它接受一个关键字，然后返回一个迭代器pair。若关键字存在，则第一个迭代器指向第一个与关键字匹配的元素，第二个迭代器指向最后一个匹配元素之后的元素。若未找到匹配元素，则两个迭代器都指向关键字可以插入的位置。程序最终写成：
+```
+for(auto pos = authors.equal_range(search_item);
+    pos.first != pos.second;
+    ++pos.first)
+    cout << pos.first->second << endl;
+```
+### 11.3.6 一个单词转换的map
+这里给出一个程序，它会展示map的创建、搜索和遍历。其功能是给定一个string，将它转换为另一个string。程序输入的是两个文件，第一个文件保存的是一些规则，用来转换第二个文件中的文本。每条规则由两部分组成：一个可能出现在输入文件中的单词和一个用来替换它的短语。表达的含义是，每当第一个单词出现在输入中，我们就将它替换为对应的短语。表达的含义是，每当第一个单词出现在输入中，我们就将它替换为对应的短语。第二个输入文件包含要转换的问题。
+#### 单词转换程序
+我们程序将使用是那个函数。函数word_transform管理整个过程。它接受两个ifstream参数：第一个参数应绑定到单词转换文件，第二个参数应绑定到我们要转换的文本文件。函数buildMap会读取转换规则文件，并创建一个map，用于保存每个单词到其转换内容的映射。函数transform接受一个string，如果存在转换规则，返回转换后的内容。
+我们首先定义word_transform函数，最重要的就是调用buildMap和tansform：
+```
+void word_transform(ifstream &map_file, ifstream &input)
+{
+    auto trans_map = buildMap(map_file);   //保存转换规则
+    string text;
+    while (getline(input, text)) {
+        istringstream stream(text);        //读取每个单词
+        string word;
+        bool firstword = true;             //控制是否打印空格
+        while (stream >> word) {
+            if (firstword)
+                firstword = false;
+            else
+                cout << " ";
+            cout << transform(word, trans_map);
+        }
+        cout << endl;                      //完成一行的转换
+    }
+}
+```
+#### 建立转换映射
+函数buildMap读入给定文件，建立起映射转换：
+```
+map<string, string> buildMap(fistream &map_file)
+{
+    map<string, string> trans_map;  //保存转换规则
+    string key;     //要转换的单词
+    string value;   //替换后的内容
+    while (map_file >> key && getline(map_file, value))  //读取第一个单词到key中，行中剩余内容存入value
+    {
+       if (value.size() > 1)
+            tans_map[key] = value.substr(1);  //跳过前导空格
+        else
+            throw runtime_error("no rule for " + key);
+    }
+    return trans_map;
+}
+```
+注意的是，如果同一个键值出现次数多于一次，那么会出现该键值的**最后一次插入值替代先前值**的情况。
+#### 生成转换文本
+```
+const string& transform(const string &s, const map<string, string> &m)
+{
+    auto map_it = m.find(s);
+    if (map_it != m.cend())
+        return map_it->second;  //返回替换内容
+    else
+        return s;  //返回原string
+}
+```
 
-
+## 11.4 无序容器
 
 
 
