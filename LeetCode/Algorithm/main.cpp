@@ -7,6 +7,12 @@
 
 using namespace std;
 
+struct ListNode {
+    int val;
+    ListNode *next;
+    ListNode(int x) : val(x), next(NULL) {}
+};
+
 class Solution {
 public:
     //005 Find the longest Palindrome
@@ -357,11 +363,381 @@ public:
         return ministStr;
     }
 
-    //015
-    vector<vector<int>> threeSum(vector<int>& nums){
+    //015 Three int sum to zero
+    vector<vector<int>> threeSumSelf(vector<int>& nums){  //Two much time...
+        vector<vector<int>> res;
+        if (nums.size() < 3) return res;
+
+        sort(nums.begin(), nums.end());
+        int zeroPos = 0;
+        while (zeroPos < nums.size())
+            if (nums.at(zeroPos++) > 0)
+                break;
+        unsigned int i = 0, j, k, size = nums.size();
+        for (; i < zeroPos; i++)
+        {
+            j = size - 1; k = i + 1;
+            while (k < j)
+            {
+                auto sRes = nums.at(i) + nums.at(k) + nums.at(j);
+                if (sRes == 0)
+                {
+                    auto sGrp = vector<int>{nums.at(i), nums.at(k), nums.at(j)};
+                    if (!(i > 0 && (nums.at(i) == nums.at(i - 1))) && !(j < size - 1 && (nums.at(j) == nums.at(j + 1))))
+                        res.push_back(sGrp);
+                    ++k; --j;
+                }
+                else if (sRes < 0)
+                    ++k;
+                else
+                    --j;
+            }
+        }
+        return res;
+    }
+
+    vector<vector<int> > threeSum(vector<int>& nums) { //核心是如何排除重复数字？
+        vector<vector<int> > ret;
+        int len = nums.size();
+        sort(nums.begin(),nums.end());//sort the input
+        for(int i=0;i<len-2;i++){
+            //find the tripe for each nums[i]
+            // j1 and j2 log the index of the other two numbers
+            if(i ==0 ||(i>0 && nums[i] != nums[i-1])){
+                int p1 = i+1, p2 = len-1; // set two pointers
+                while(p1 < p2){
+                    if(nums[p1] + nums[p2] < -nums[i]){
+                        p1++;
+                    }else if(nums[p1] + nums[p2] == -nums[i]){
+                        if(p1 == i+1){
+                            vector<int > vtemp{nums[i], nums[p1], nums[p2]};
+                            ret.push_back(vtemp);
+                            vtemp.clear();
+                        }else if(nums[p1] != nums[p1-1]){
+                            vector<int > vtemp{nums[i], nums[p1], nums[p2]};
+                            ret.push_back(vtemp);
+                            vtemp.clear();
+                        }
+                        p1++,p2--;
+                    }else{
+                        p2--;
+                    }
+                }
+            }
+        }
+        return ret;
+    }
+
+    //016 Find the most three numbers closest to target
+    int threeSumClosest(vector<int>& nums, int target) {
+        sort(nums.begin(), nums.end());
+        int ans = nums[0] + nums[1] + nums[2];
+        for(int i = 0; i < nums.size(); i++) {
+            int st = i + 1, ed = nums.size() - 1;
+            while( st < ed) {
+                int sum = nums[st] + nums[ed] + nums[i];
+                if(abs(target - sum) < abs(target - ans)) ans = sum;
+                if(sum == target) return ans;
+                else if(sum < target) st++;
+                else ed--;
+            }
+        }
+        return ans;
+    }
+
+    //017 List all possible letter combinations
+    void getTotalString(string cStr, vector<string> &cRes, const map<int, string> &table){
+        if (!cStr.size()) return;
+
+        char cChar = cStr.at(0);
+        int tNum = cChar - '0';
+        string possibleStr = table.at(tNum);
+        vector<string> tRes;
+        if (cRes.size() == 0)
+        {
+            for (int j = 0; j < possibleStr.size(); j++)
+                tRes.push_back(possibleStr.substr(j, 1));
+        }
+        else
+        {
+            for (int i = 0; i < cRes.size(); i++)
+            {
+                for (int j = 0; j < possibleStr.size(); j++)
+                {
+                    string tNew(cRes.at(i));
+                    tNew.push_back(possibleStr.at(j));
+                    tRes.push_back(tNew);
+                }
+            }
+        }
+        cRes.swap(tRes);
+        if (cStr.size())
+            getTotalString(cStr.substr(1), cRes, table);
+    }
+
+    vector<string> letterCombinations(string digits) {
+        map<int, string> buttons;
+        buttons[2] = "abc"; buttons[3] = "def"; buttons[4] = "ghi";
+        buttons[5] = "jkl"; buttons[6] = "mno"; buttons[7] = "pqrs";
+        buttons[8] = "tuv"; buttons[9] = "wxyz";
+        vector<string> res;
+        getTotalString(digits, res, buttons);
+        return res;
+    }
+
+    //018 Four nums sum to zero
+    vector<vector<int>> fourSum1(vector<int>& nums, int target) {
+        sort(nums.begin(), nums.end());
+        vector<vector<int> > res;
+        if(nums.size()<4)
+            return res;
+        int a, b, c, d, _size = nums.size();
+        for(a = 0; a <= _size-4; a++){
+            if (nums[a] * 4 > target) break;
+            if (a > 0 && nums[a] == nums[a-1]) continue;               //确保nums[a] 改变了
+            for (b = a + 1; b <=_size - 3; b++){
+                if (b > a + 1 && nums[b] == nums[b - 1]) continue;     //确保nums[b] 改变了
+                c = b + 1,d = _size - 1;
+                while(c < d){
+                    if(nums[a] + nums[b] + nums[c] + nums[d] < target)
+                        c++;
+                    else if(nums[a] + nums[b] + nums[c] + nums[d] > target)
+                        d--;
+                    else{
+                        res.push_back({nums[a], nums[b], nums[c] ,nums[d]});
+                        while(c < d && nums[c + 1] == nums[c])                //确保nums[c] 改变了
+                            c++;
+                        while(c < d&& nums[d - 1] == nums[d])                //确保nums[d] 改变了
+                            d--;
+                        c++;
+                        d--;
+                    }
+                }
+            }
+        }
+        return res;
+    }
+
+    vector<vector<int>> fourSum2(vector<int>& nums, int target) {            //High-speed way，本质其实就是多一些比较
+        if (nums.size() < 4) return {};
+        sort(nums.begin(), nums.end());
+        int N = nums.size();
+        int maxSum3 = nums[N - 3] + nums[N - 2] + nums[N - 1];
+        int maxSum2 = nums[N - 2] + nums[N - 1];
+        vector<vector<int> > res;
+        for (int i = 0; i < N - 3; ++i) {
+            if (4 * nums[i] > target) break;
+            if (i > 0 && nums[i] == nums[i - 1]) continue;
+            if (nums[i] + maxSum3 < target) continue;
+            for (int j = i + 1;j < N - 2; ++j) {
+                if (2 * (nums[i] + nums[j]) > target) break;
+                if (j > i + 1 && nums[j - 1] == nums[j]) continue;
+                if (nums[i] + nums[j] + maxSum2 < target) continue;
+                int t = target - nums[i] - nums[j];
+                int l = j + 1;
+                int r = N - 1;
+                while (l < r) {
+                    if (nums[l] + nums[r] > t) {
+                        --r;
+                    } else if (nums[l] + nums[r] < t) {
+                        ++l;
+                    } else {
+                        res.push_back({nums[i], nums[j], nums[l], nums[r]});
+                        while (l < r && nums[l] == nums[++l]);                 //这个写法非常有意思
+                        while (l < r && nums[r] == nums[--r]);
+                    }
+                }
+            }
+        }
+        return res;
+    }
+
+    ListNode* removeNth(ListNode* head, int n) {
+        if (!n)
+        {
+            auto first = head->next;
+            delete head;
+            return first;
+        }
+
+        auto t = head;
+        while (--n && t->next)
+           t = t->next;
+        if (n) return NULL;  //Over-range
+        auto target = t->next;
+        t->next = target->next;
+        target->next = NULL;
+        delete target;
+        return head;
+    }
+
+    //019 remove node and return head
+    ListNode* removeNthFromEndSelf(ListNode* head, int n) {
+        int size = 1;
+        auto cNode = head;
+        while (cNode = cNode->next)
+            size++;
+        if (n > size) return NULL;
+        if (n == size)
+        {
+            auto tHead = head->next;
+            head->next = NULL;
+            delete head;
+            return tHead;
+        }
+
+        int wCount = size - n;
+        auto tNode = head;
+        while (--wCount)
+            tNode = tNode->next;
+        auto targetNode = tNode->next;
+        tNode->next = targetNode->next;
+        targetNode->next = NULL;
+        delete targetNode;
+        return head;
+    }
+
+    //Recursive
+    ListNode* removeNthFromEnd(ListNode* head, int n) {
+        ListNode *start = new ListNode(0);                                //这个方法也很值得借鉴，在开头附加一个额外节点，这样不用考虑特殊情况，非常巧妙
+        start->next = head;
+        foo(start, n);
+        return start->next;
+    }
+
+    int foo (ListNode* l, int n){
+        if(l->next == NULL) return 1;
+        int f = foo(l->next, n);                                           //这两步之前其实进行了回溯，从最底层向上回溯，这样避免了单纯的去计算size
+        if(f == n)
+            l->next = l->next->next;
+        return f + 1;
+    }
+
+    //020 Judege the brakets valid
+    bool isValid(string s) {
+        stack<char> st;
+        map<char, char> bracketsTable;
+        bracketsTable[')'] = '(';
+        bracketsTable[']'] = '[';
+        bracketsTable['}'] = '{';
+        auto sIt = s.cbegin();
+        while (sIt != s.cend())
+        {
+            if (bracketsTable.end() == bracketsTable.find(*sIt))
+                st.push(*sIt);
+            else
+            {
+                if (!st.size() || st.top() != bracketsTable[*sIt])
+                    return false;
+                else
+                    st.pop();
+            }
+            ++sIt;
+        }
+
+        if (st.size())
+            return false;
+        return true;
+    }
+
+    //021 Merge two increasing node list
+    ListNode* mergeTwoLists(ListNode* l1, ListNode* l2) {
+        auto vSt = new ListNode(0);
+        ListNode *l1C, *l2C, *cNode = vSt;
+        l1C = l1; l2C = l2;
+        while (!(l1C == NULL && l2C == NULL))
+        {
+            if (l1C == NULL)
+            {
+                cNode->next = l2C;
+                l2C = l2C->next;
+            }
+            else if (l2C == NULL)
+            {
+                cNode->next = l1C;
+                l1C = l1C->next;
+            }
+            else
+            {
+                if (l1C->val > l2C->val)
+                {
+                    cNode->next = l2C;
+                    l2C = l2C->next;
+                }
+                else
+                {
+                    cNode->next = l1C;
+                    l1C = l1C->next;
+                }
+            }
+            cNode = cNode->next;
+        }
+        return vSt->next;
+    }
+
+    //022 Brackets generation
+    void fillThesis(int leftCount, int rightCount, vector<string> &res){
+        if (!leftCount && !rightCount) return;
+
+        auto it = res.begin();
+        if (leftCount == rightCount)
+        {
+            if (!res.size())
+                res.push_back("(");
+            else
+                while (res.end() != it)
+                    (*it++).push_back('(');
+            fillThesis(--leftCount, rightCount, res);
+        }
+        else
+        {
+            if (!leftCount)
+            {
+                while (res.end() != it)
+                    (*it++).push_back(')');
+                fillThesis(leftCount, --rightCount, res);
+            }
+            else
+            {
+                vector<string> tNewLeft = res, tNewRight = res;
+                for (auto itLeft = tNewLeft.begin(); itLeft != tNewLeft.end(); itLeft++)
+                    (*itLeft).push_back('(');
+                fillThesis(leftCount - 1, rightCount, tNewLeft);
+
+                for (auto itRight = tNewRight.begin(); itRight != tNewRight.end(); itRight++)
+                    (*itRight).push_back(')');
+                fillThesis(leftCount, rightCount - 1, tNewRight);
+
+                tNewLeft.insert(tNewLeft.end(), tNewRight.begin(), tNewRight.end());
+                res.swap(tNewLeft);
+            }
+        }
+    }
+
+    vector<string> generateParenthesis(int n) {                                //A little bit slow
+        vector<string> res;
+        fillThesis(n, n, res);
+        return res;
+    }
+
+    //023 Merge multiple lists from
+    ListNode* mergeKLists(vector<ListNode*>& lists) {
+        auto K = lists.size();
+        auto tSt = new ListNode(0);
+        vector<ListNode*> cPtr(K);
+        for (int i = 0; i < K; i++)
+            cPtr[i] = lists[i];
+
+        while ()
 
     }
+
 };
+
+
+
+
+
 
 int main(int argc, char *argv[])
 {
@@ -376,6 +752,20 @@ int main(int argc, char *argv[])
     std::cout << "The answer of 012 is:" << solution.intToRoman2(1994) << endl;
     std::cout << "The answer of 013 is:" << solution.romanToInt("MCMXCIV") << endl;
     std::cout << "The answer of 014 is:" << solution.longestCommonPrefix(vector<string>{"flower", "flow", "flight"}) << endl;
+    auto res = solution.threeSumSelf(vector<int>{-1, 0, 1, 2, -1, -4});
+    solution.letterCombinations("234");
+    solution.fourSum1(vector<int>{1, 0, -1, 0, 2, -2}, 0);
+    auto ln1 = new ListNode(1), ln2 = new ListNode(2), ln3 = new ListNode(3), ln4 = new ListNode(4), ln5 = new ListNode(5);
+    ln1->next = ln2; ln2->next = ln3; ln3->next = ln4; ln4->next = ln5;
+    solution.removeNthFromEnd(ln1, 5);
+    std::cout << "The answer of 020 is:" << solution.isValid("]") << endl;
+
+    auto lnn1 = new ListNode(1), lnn2 = new ListNode(2), lnn3 = new ListNode(4), lnn4 = new ListNode(1), lnn5 = new ListNode(3), lnn6 = new ListNode(4);
+    lnn1->next = lnn2; lnn2->next = lnn3; lnn4->next = lnn5; lnn5->next = lnn6;
+    solution.mergeTwoLists(lnn1, lnn4);
+
+    solution.generateParenthesis(2);
+
 
     return 0;
 }
