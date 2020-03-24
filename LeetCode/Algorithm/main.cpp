@@ -4,6 +4,8 @@
 #include <stack>
 #include <algorithm>
 #include <map>
+#include <queue>
+#include <functional>
 
 using namespace std;
 
@@ -720,17 +722,125 @@ public:
         return res;
     }
 
-    //023 Merge multiple lists from
+    //023 Merge multiple lists
     ListNode* mergeKLists(vector<ListNode*>& lists) {
-        auto K = lists.size();
-        auto tSt = new ListNode(0);
-        vector<ListNode*> cPtr(K);
-        for (int i = 0; i < K; i++)
-            cPtr[i] = lists[i];
-
-        while ()
-
+        priority_queue<pair<int,ListNode*>,vector<pair<int,ListNode*>>,greater<pair<int,ListNode*>>> m;   //利用priority_queue来保证
+        for(auto x:lists){
+            if(x){
+                m.push(make_pair(x->val,x));
+            }
+        }
+        ListNode* root  = new ListNode(-1);
+        auto q = root;
+        while(!m.empty()){
+            auto p = m.top();
+            m.pop();
+            q->next = p.second;
+            q = q->next;
+            if(p.second->next){
+                m.push(make_pair(p.second->next->val, p.second->next));
+            }
+        }
+        return root->next;
     }
+
+    //024 Swap pairs
+    ListNode* swapPairs(ListNode* head) {
+        if (!head || head->next == NULL) return head;
+        ListNode *st = head, *a1 = head->next, *tBefore = NULL;
+        ListNode *pHead;
+        while (st)
+        {
+            if (!a1) break;
+            auto t1 = a1->next;
+            a1->next = st;
+            st->next = t1;
+            if (!tBefore)
+                pHead = a1;
+            else
+                tBefore->next = a1;
+
+            if (!(st->next))
+                break;
+            tBefore = st;
+            st = st->next;
+            a1 = st->next;
+        }
+        return pHead;
+    }
+
+    //025
+    void reverseKGroupPart(ListNode* tHead, ListNode* tEnd){
+        stack<ListNode*> nodes;
+        auto sHead = tHead, sEnd = tEnd;
+        while (sHead != sEnd)
+        {
+            nodes.push(sHead);
+            sHead = sHead->next;
+        }
+        nodes.push(sEnd);
+
+        ListNode *fHead = nodes.top(); nodes.pop();
+        while (nodes.size())
+        {
+            fHead->next = nodes.top();
+            fHead = nodes.top();
+            nodes.pop();
+        }
+    }
+
+    ListNode* reverseKGroup(ListNode* head, int k) {
+        ListNode *cNode = head, *grpBefore = NULL, *grpAfter, *pHead;
+        while (cNode)
+        {
+            int wK = k;
+            auto stNode = cNode;
+            while (--wK && cNode->next)
+                cNode = cNode->next;
+            auto cNNode = cNode->next;
+            if (!wK)
+                reverseKGroupPart(stNode, cNode);
+
+            if (!grpBefore)
+                pHead = cNode;
+            else
+                grpBefore->next = (!wK) ? cNode : stNode;
+
+            grpBefore = (!wK) ? stNode : cNode;
+            if (!(cNode = cNNode))
+            {
+                grpBefore->next = NULL;
+                break;
+            }
+        }
+        return pHead;
+    }
+
+    int removeDuplicates(vector<int>& nums) {
+        if (!nums.size()) return 0;
+        auto it = nums.begin();
+        int tVal = *it, count = 1;
+        while (++it != nums.end())
+        {
+            if (tVal == *it)
+            {
+                auto itb = it;
+                while (*(++it) == tVal) {
+                    if (it == nums.end())
+                        break;
+                }
+                nums.erase(itb, it);
+            }
+            else
+                ++count;
+        }
+
+        return count;   //0324 test here
+    }
+
+
+
+
 
 };
 
@@ -766,6 +876,17 @@ int main(int argc, char *argv[])
 
     solution.generateParenthesis(2);
 
+    auto la1 = new ListNode(1); auto la2 = new ListNode(4); auto la3 = new ListNode(5); la1->next = la2; la2->next = la3;
+    auto lb1 = new ListNode(1); auto lb2 = new ListNode(3); auto lb3 = new ListNode(4); lb1->next = lb2; lb2->next = lb3;
+    auto lc1 = new ListNode(2); auto lc2 = new ListNode(6); lc1->next = lc2;
+    vector<ListNode*> KGrp{la1, lb1, lc1};
+    solution.mergeKLists(KGrp);
+
+    auto ld1 = new ListNode(1), ld2 = new ListNode(2), ld3 = new ListNode(3), ld4 = new ListNode(4); ld1->next = ld2; ld2->next = ld3; ld3->next = ld4;
+    solution.swapPairs(ld1);
+
+    auto le1 = new ListNode(1), le2 = new ListNode(2), le3 = new ListNode(3), le4 = new ListNode(4), le5 = new ListNode(5); le1->next = le2; le2->next = le3; le3->next = le4; le4->next = le5;
+    solution.reverseKGroup(le1, 2);
 
     return 0;
 }
