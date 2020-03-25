@@ -744,6 +744,21 @@ public:
         return root->next;
     }
 
+    //0325 Here
+    //030 (what a search engine usually could encounter)
+    vector<string> getPossibleString(vector<string>& words) {
+        stack<string> sWords;
+        for (auto s : words)
+            sWords.push(s);
+
+    }
+
+    vector<int> findSubstring(string s, vector<string>& words) {
+        int size = words.size();
+        vector<string> combination;
+
+    }
+
     //024 Swap pairs
     ListNode* swapPairs(ListNode* head) {
         if (!head || head->next == NULL) return head;
@@ -816,36 +831,117 @@ public:
         return pHead;
     }
 
+    //026
     int removeDuplicates(vector<int>& nums) {
         if (!nums.size()) return 0;
-        auto it = nums.begin();
-        int tVal = *it, count = 1;
-        while (++it != nums.end())
+        auto it = nums.begin(), itb = it;
+        int tVal;
+        while (it != nums.end())
         {
-            if (tVal == *it)
+            itb = it;
+            tVal = *it;
+            while ((it + 1) != nums.end() && *(it + 1) == tVal)
+                ++it;
+            if (it != itb)
+                it = nums.erase(itb++, it);
+            ++it;
+        }
+        return nums.size();
+    }
+
+    //027
+    int removeElement(vector<int>& nums, int val) {
+        int size = nums.size(), lastp = size - 1, stp = 0, count = 0;
+        while (stp <= lastp)
+        {
+            if (nums.at(stp) == val)
             {
-                auto itb = it;
-                while (*(++it) == tVal) {
-                    if (it == nums.end())
-                        break;
+                int tSt = stp + 1;
+                while (tSt <= lastp)
+                {
+                    nums[tSt - 1] = nums[tSt];
+                    ++tSt;
                 }
-                nums.erase(itb, it);
+                --lastp;
             }
             else
-                ++count;
+                ++stp;
         }
+        return (lastp + 1);
+    }
 
-        return count;   //0324 test here
+    //028
+    int strStr(string haystack, string needle) {
+        if (haystack.size() < needle.size()) return -1;
+        for (int st = 0; st < haystack.size() - needle.size() + 1; st++)
+            if (haystack.substr(st, needle.size()) == needle)
+                return st;
+        return -1;
+    }
+
+    //029 no divide and multiply and mod to do division
+    int divideSelf(int dividend, int divisor) {
+        if (!dividend) return 0;
+        int d1sgn = dividend > 0 ? 1 : -1;
+        int d2sgn = divisor > 0 ? 1 : -1;
+        int count = 0;
+        if (divisor == 1) return dividend;
+        if (divisor == -1)
+            if (INT_MIN == dividend)
+                return INT_MAX;
+            else
+                return -dividend;
+        if (d1sgn > 0)
+            if (d2sgn > 0)
+                while ((dividend -= divisor) >= 0)
+                    count++;
+            else
+                while ((dividend += divisor) >= 0)
+                    count--;
+        else
+            if (d2sgn > 0)
+                while ((dividend += divisor) <= 0)
+                    count--;
+            else
+                while ((dividend -= divisor) <= 0)
+                    count++;
+        return count;
+    }
+
+    int divide(int dividend, int divisor) {
+        if(dividend == 0) return 0;
+        if(divisor == 1) return dividend;
+        if(divisor == -1){
+            if (dividend > INT_MIN) return -dividend;                  // 只要不是最小的那个整数，都是直接返回相反数就好啦
+            return INT_MAX;                                            // 是最小的那个，那就返回最大的整数啦
+        }
+        long a = dividend;
+        long b = divisor;
+        int sign = 1;
+        if((a > 0 && b < 0) || (a < 0 && b > 0)){
+            sign = -1;
+        }
+        a = a > 0 ? a: -a;
+        b = b > 0 ? b: -b;
+        long res = div(a,b);
+        if (sign > 0)
+            return res > INT_MAX ? INT_MAX : res;
+        return -res;
+    }
+
+    int div(long a, long b){                                            // (经典)似乎精髓和难点就在于下面这几句
+        if (a < b) return 0;
+        long count = 1;
+        long tb = b;                                                    // 在后面的代码中不更新b
+        while((tb + tb) <= a){
+            count = count + count;                                      // 最小解翻倍
+            tb = tb + tb;                                               // 当前测试的值也翻倍
+        }
+        return count + div(a - tb, b);
     }
 
 
-
-
-
 };
-
-
-
 
 
 
@@ -887,6 +983,11 @@ int main(int argc, char *argv[])
 
     auto le1 = new ListNode(1), le2 = new ListNode(2), le3 = new ListNode(3), le4 = new ListNode(4), le5 = new ListNode(5); le1->next = le2; le2->next = le3; le3->next = le4; le4->next = le5;
     solution.reverseKGroup(le1, 2);
+
+    std::cout << "The answer of 026 is:" << solution.removeDuplicates(vector<int>{0,0,1,1,1,2,2,3,3,4,4}) << endl;
+    std::cout << "The answer of 027 is:" << solution.removeElement(vector<int>{0,1,2,2,3,0,4,2}, 2) << endl;
+    std::cout << "The answer of 029 is:" << solution.divide(100000, -3) << endl;
+
 
     return 0;
 }
