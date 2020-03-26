@@ -6,6 +6,7 @@
 #include <map>
 #include <queue>
 #include <functional>
+#include <unordered_map>
 
 using namespace std;
 
@@ -744,19 +745,59 @@ public:
         return root->next;
     }
 
-    //0325 Here
-    //030 (what a search engine usually could encounter)
-    vector<string> getPossibleString(vector<string>& words) {
-        stack<string> sWords;
-        for (auto s : words)
-            sWords.push(s);
+    //030 (what a search engine usually could encounter) sliding window way to solve
+    vector<int> findSubstring(string s, vector<string>& words)
+    {
+        if (words.size() == 0) return {};
+        unordered_map<string, int> wordcnt;
+        for (auto& w : words)
+        {
+            wordcnt[w]++;
+        }
+        int len = words[0].size();
 
-    }
+        vector<int> ans;
+        for (int i = 0; i < len; i++)
+        {
+            int left = i;
+            int right = left;
+            int cnt = 0;
 
-    vector<int> findSubstring(string s, vector<string>& words) {
-        int size = words.size();
-        vector<string> combination;
+            unordered_map<string, int> window;
+            while (left + words.size() * len <= s.size())
+            {
+                string temp = "";
+                while (cnt < words.size())
+                {
+                    temp = s.substr(right, len);
+                    if (wordcnt.find(temp) == wordcnt.end() || window[temp] >= wordcnt[temp])
+                        break;
+                    window[temp]++;
+                    cnt++;
+                    right += len;
+                }
 
+                if (window == wordcnt)
+                {
+                    ans.push_back(left);
+                }
+
+                if (wordcnt.find(temp) != wordcnt.end())
+                {
+                    window[s.substr(left, len)]--;
+                    cnt--;
+                    left += len;
+                }
+                else
+                {
+                    right += len;
+                    left = right;
+                    cnt = 0;
+                    window.clear();
+                }
+            }
+        }
+        return ans;
     }
 
     //024 Swap pairs
@@ -987,7 +1028,8 @@ int main(int argc, char *argv[])
     std::cout << "The answer of 026 is:" << solution.removeDuplicates(vector<int>{0,0,1,1,1,2,2,3,3,4,4}) << endl;
     std::cout << "The answer of 027 is:" << solution.removeElement(vector<int>{0,1,2,2,3,0,4,2}, 2) << endl;
     std::cout << "The answer of 029 is:" << solution.divide(100000, -3) << endl;
-
+    vector<string> trump{"foo","bar"};
+    solution.findSubstring("barfoothefoobarman", trump);
 
     return 0;
 }
