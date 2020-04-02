@@ -162,7 +162,7 @@ public:
         return (val == x || (val > 9 && val / 10 == x));
     }
 
-    //010 Expression match
+    //010 Expression match(classic dynamic programming)
     bool isMatch(string s, string p) {
         if (p.empty()) return s.empty();
         auto first_match = !s.empty() && (s[0] == p[0] || p[0] == '.');
@@ -752,12 +752,12 @@ public:
         unordered_map<string, int> wordcnt;
         for (auto& w : words)
         {
-            wordcnt[w]++;
+            wordcnt[w]++; //Record the possible combination
         }
         int len = words[0].size();
 
         vector<int> ans;
-        for (int i = 0; i < len; i++)
+        for (int i = 0; i < len; i++)        //核心：比较开始每固定位数是否在两个HashMap中都含有，同时计数
         {
             int left = i;
             int right = left;
@@ -798,6 +798,152 @@ public:
             }
         }
         return ans;
+    }
+
+    //031 Use the next permutation
+    void nextPermutation(vector<int>& nums) {
+        int pos = nums.size() - 1;
+        while (pos > 0 && nums[pos] <= nums[pos - 1])
+            pos--;
+        std::reverse(nums.begin() + pos, nums.end());  //逆序
+        if (pos > 0){
+            int start = pos;
+            for (; start < nums.size(); start++){ //寻找第一个大于nums[pos - 1]的数
+                if (nums[start] > nums[pos - 1]){
+                    swap(nums[start], nums[pos - 1]); //交换
+                    break;
+                }
+            }
+        }
+    }
+
+    void nextPermutationSelf(vector<int> &nums) {                        //标准字典序排法
+        int oriPos = nums.size() - 1;
+        while (oriPos > 0 && nums.at(oriPos) <= nums.at(oriPos - 1))
+            oriPos--;
+        if (!oriPos)
+        {
+            std::sort(nums.begin(), nums.end());
+            return;
+        }
+        --oriPos;
+        int sOriPos = nums.size() - 1;
+        while (sOriPos > 0 && nums.at(oriPos) >= nums.at(sOriPos))
+            sOriPos--;
+        swap(nums[oriPos], nums[sOriPos]);
+        std::sort(nums.begin() + oriPos + 1, nums.end());
+    }
+
+    //032 O(n^2)way to solve
+    bool isVaild(string s) {
+        stack<char> a;
+        for (auto v : s) {
+            if (v == '(') {
+                a.push(v);
+            } else if (!a.empty() && a.top() == '(') {
+                a.pop();
+            } else return false;
+        }
+        return a.empty();
+    }
+
+    int longestValidParentheses(string s) {
+        int maxLen = 0;
+        for (int i = 0; i < s.length(); i++) {
+            for (int j = 2; j + i <= s.length(); j += 2) {
+                if (isVaild(s.substr(i, j))) {
+                    if (j > maxLen) {
+                        maxLen = j;
+                    }
+                }
+            }
+        }
+        return maxLen;
+    }
+
+    //Another example to show dynamic programming
+    int longestValidParentheses2(string s) {    //O(n) way to solve
+        int maxLen = 0;
+        vector<int> dp(s.length());                                                                  //存储每一位截止有效的位数
+        for (int i = 1; i < s.length(); i++) {
+            if (s[i] == ')') {
+                if (s[i - 1] == '(') {
+                    dp[i] = (i - 2 >= 0 ? dp[i - 2] : 0) + 2;                                        //如果前一位为（，则直接+2
+                } else if (i - dp[i - 1] - 1 >= 0 && s[i - dp[i - 1] - 1] == '(') {                  //如果还是），则
+                    dp[i] = (i - dp[i - 1] - 2 >= 0 ? dp[i - dp[i - 1] - 2] : 0) + dp[i - 1] + 2;    //其实还是先前全部有效内容叠加，其中dp[i - dp[i-1] - 2]代指前一个(之前全部有效指标
+                }
+            }
+            maxLen = max(dp[i], maxLen);
+        }
+        return maxLen;
+    }
+
+    //033 Search in rotated sort array
+    int search(vector<int>& nums, int target, int st, int end) {
+        if (!nums.size())
+            return -1;
+        if (nums[st] == target)
+            return st;
+        if (nums[end] == target)
+            return end;
+        if (st == end)
+            return -1;
+        if (target < nums[st] && target > nums[end])
+            return -1;
+
+        int mid = (st + end) / 2;
+        if (target < nums[mid])
+        {
+            if (target < nums[st])
+                return search(nums, target, mid, end);
+            else
+                return search(nums, target, st, mid);
+        }
+        else if (target > nums[mid])
+        {
+            if (target > nums[end])
+                return search(nums, target, st, mid);
+            else
+                return search(nums, target, mid, end);
+        }
+        else
+        {
+            return mid;
+        }
+    }
+
+    int search(vector<int>& nums, int target) {
+        return search(nums, target, 0, nums.size() - 1);
+    }
+
+    int search2(vector<int>& nums, int target) {
+        int lo = 0, hi = nums.size() - 1;
+        while (lo < hi) {
+            int mid = (lo + hi) / 2;
+            if ((nums[0] > target) ^ (nums[0] > nums[mid]) ^ (target > nums[mid]))
+                lo = mid + 1;
+            else
+                hi = mid;
+        }
+        return lo == hi && nums[lo] == target ? lo : -1;
+    }
+
+    int search3(vector<int>& nums, int target, int st, int end) {
+        if (st == end)
+            if (nums.at(st) == target)
+                return st;
+            else
+                return -1;
+        int mid = (st + end) / 2;
+        int vst = nums.at(st), vmid = nums.at(mid), vend = nums.at(end);
+
+
+        //TODO: 0402
+
+    }
+
+    int search3(vector<int>& nums, int target) {
+        return search3(nums, target, 0, nums.size() - 1);
     }
 
     //024 Swap pairs
@@ -1030,6 +1176,11 @@ int main(int argc, char *argv[])
     std::cout << "The answer of 029 is:" << solution.divide(100000, -3) << endl;
     vector<string> trump{"foo","bar"};
     solution.findSubstring("barfoothefoobarman", trump);
+    solution.nextPermutationSelf(vector<int>{3, 2, 1});
+    std::cout << "The answer of 032 is:" << solution.longestValidParentheses("(())())") << endl;
+    std::cout << "The answer of 033 is:" << solution.search(vector<int>{ 5, 6, 1, 2, 3, 4}, 1) << endl;
+
+
 
     return 0;
 }

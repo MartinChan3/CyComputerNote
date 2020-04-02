@@ -1120,7 +1120,20 @@ void MainWindow::changeBrush()
 
 147. map和unordered_map的初始化可以使用双括号，类似``unordered_map<int, string> myMap={{ 5, "Five" },{ 6, "Six" }};``     
 
-148. 
+148. 字典序法：
+- 从右向左，找出第一个左边小于右边的数，设为list[a];   
+- 从右向左，找出第一个大于list[a]的数，设为list[b];    
+- 交换list[a], list[b];    
+- 将list[a]后面的数据，从小到大排列；       
+![字典序排列](https://img-blog.csdnimg.cn/20190603162948571.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3dlaXhpbl80MzgxOTExMw==,size_16,color_FFFFFF,t_70 )
 
+149. 动态规划的题目一般分成三步：    
+- 确定状态，即答案表是存储什么答案；   
+- 确定状态转移方程，也就是怎么将你的答案表填满，换句话说，就是一些表达式；    
+- 确定边界情况，什么情况下可能越界，要单独判断考虑（有可能无边界情况）。      
+Example：Leetcode032    
+![Leetcode032](https://pic.leetcode-cn.com/455a86bf87800938b6dcfecab039e106916df1f9dcdd302ff45d5a2ddedf09dd-%E6%8D%95%E8%8E%B7.PNG)
+
+150. 一个比较简洁的方式去确定内容是
 
 
