@@ -879,41 +879,29 @@ public:
     }
 
     //033 Search in rotated sort array
-    int search(vector<int>& nums, int target, int st, int end) {
-        if (!nums.size())
-            return -1;
-        if (nums[st] == target)
-            return st;
-        if (nums[end] == target)
-            return end;
-        if (st == end)
-            return -1;
-        if (target < nums[st] && target > nums[end])
-            return -1;
-
-        int mid = (st + end) / 2;
-        if (target < nums[mid])
-        {
-            if (target < nums[st])
-                return search(nums, target, mid, end);
-            else
-                return search(nums, target, st, mid);
-        }
-        else if (target > nums[mid])
-        {
-            if (target > nums[end])
-                return search(nums, target, st, mid);
-            else
-                return search(nums, target, mid, end);
-        }
-        else
-        {
-            return mid;
-        }
-    }
-
     int search(vector<int>& nums, int target) {
-        return search(nums, target, 0, nums.size() - 1);
+        int left = 0;
+        int right = nums.size() - 1;
+        while (left <= right)
+        {
+            int mid = left + ((right - left) >> 1);              //快速计算平均值
+            if (target == nums[mid])
+                return mid;
+            if (nums[mid] >= nums[left]) {                       //1. 说明左半部分递增;2. 只有两个数的情况下会有mid=left
+                if (target >= nums[left] && target < nums[mid])
+                    right = mid - 1;
+                else
+                    left = mid + 1;
+            }
+            else                                                 //说明右半部分单调递增
+            {
+                if (target > nums[mid] && target <= nums[right])
+                    left = mid + 1;
+                else
+                    right = mid - 1;
+            }
+        }
+        return -1;
     }
 
     int search2(vector<int>& nums, int target) {
@@ -928,23 +916,116 @@ public:
         return lo == hi && nums[lo] == target ? lo : -1;
     }
 
-    int search3(vector<int>& nums, int target, int st, int end) {
-        if (st == end)
-            if (nums.at(st) == target)
-                return st;
+    //034
+    vector<int> searchRange(vector<int>& nums, int target) {
+        vector<int> count;
+        int left = 0, right = nums.size() - 1;
+        while (left <= right)
+        {
+            int mid = left + ((right - left) >> 1);
+            if (nums[left] > target || nums[right] < target)
+                break;
+            if (nums[mid] > target)
+                right = mid - 1;
+            else if (nums[mid] < target)
+                left = mid + 1;
             else
-                return -1;
-        int mid = (st + end) / 2;
-        int vst = nums.at(st), vmid = nums.at(mid), vend = nums.at(end);
-
-
-        //TODO: 0402
-
+            {
+                int st = mid, end = mid;
+                while (st >= left && target == nums[st])
+                    st--;
+                while (end <= right && target == nums[end] )
+                    end++;
+                count.push_back(++st);
+                count.push_back(--end);
+                return count;
+            }
+        }
+        return vector<int>{-1, -1};
     }
 
-    int search3(vector<int>& nums, int target) {
-        return search3(nums, target, 0, nums.size() - 1);
+    //035
+    int searchInsert(vector<int>& nums, int target) {
+        int left = 0, right = nums.size() - 1;
+        while (left <= right)
+        {
+            if (target < nums[left])
+                return left;
+            if (target > nums[right])
+                return right + 1;
+            int mid = left + ((right - left) >> 1);
+            if (nums[mid] > target)
+                right = mid - 1;
+            else if (nums[mid] < target)
+                left = mid + 1;
+            else
+                return mid;
+        }
+        return left;
     }
+
+    //036
+    void clear(map<char, int> &tMap){
+        for (auto t : tMap)
+            t.second = 0;
+    }
+
+    bool checkValid(const map<char, int> &tMap) {
+        for (auto t : tMap)
+            if (t.second > 1)
+                return false;
+        return true;
+    }
+
+    bool isValidSudoku(vector<vector<char>>& board) {
+        int colSize = board.size(), rowSize = board[0].size();
+        map<char, int> countMap{{'1', 0}, {'2', 0}, {'3', 0},
+                                {'4', 0}, {'5', 0}, {'6', 0},
+                                {'7', 0}, {'8', 0}, {'9', 0}};
+
+        //by row
+        for (int i = 0; i < colSize; i++)
+        {
+            clear(countMap);
+            for (auto s : board[i])
+            {
+                if (s != '.')
+                    ++countMap[s];
+            }
+            if (!checkValid(countMap))
+                return false;
+        }
+
+        //by col
+        for (int i = 0; i < colSize; i++)
+        {
+            clear(countMap);
+            for (int j = 0; j < rowSize; j++)
+                if (board[j][i] != '.')
+                    ++countMap[board[j][i]];
+            if (!checkValid(countMap))
+                return false;
+        }
+
+        //by grid
+        for (int i = 0; i < 9; i++)
+        {
+            clear(countMap);
+            int cRow = i / 3, cCol = i - cRow * 3;
+            for (int j = 0; j < 3; j++)
+                for (int k = 0; k < 3; k++)
+                {
+                    auto c = board[j + cRow * 3][ k + cCol * 3];
+                    if (c != '.')
+                        ++countMap[c];
+                }
+            if (!checkValid(countMap))
+                return false;
+        }
+
+        return true;
+    }
+
 
     //024 Swap pairs
     ListNode* swapPairs(ListNode* head) {
@@ -1179,8 +1260,9 @@ int main(int argc, char *argv[])
     solution.nextPermutationSelf(vector<int>{3, 2, 1});
     std::cout << "The answer of 032 is:" << solution.longestValidParentheses("(())())") << endl;
     std::cout << "The answer of 033 is:" << solution.search(vector<int>{ 5, 6, 1, 2, 3, 4}, 1) << endl;
-
-
+    solution.searchRange(vector<int>{ 1}, 1);
+    std::cout << "The answer of 035 is:" << solution.searchInsert(vector<int>{ 1, 3, 4, 5, 7, 9}, 4) << endl;
+    std::cout << "The answer of 036 is:" << solution.isValidSudoku(vector<vector<char>>{}) << endl;   //TODO：test here
 
     return 0;
 }

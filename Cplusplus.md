@@ -1134,6 +1134,6 @@ void MainWindow::changeBrush()
 Example：Leetcode032    
 ![Leetcode032](https://pic.leetcode-cn.com/455a86bf87800938b6dcfecab039e106916df1f9dcdd302ff45d5a2ddedf09dd-%E6%8D%95%E8%8E%B7.PNG)
 
-150. 一个比较简洁的方式去确定内容是
+150. 
 
 
