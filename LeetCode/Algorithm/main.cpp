@@ -16,6 +16,29 @@ struct ListNode {
     ListNode(int x) : val(x), next(NULL) {}
 };
 
+void print(vector<pair<int, int>> vec) {
+    for (auto a : vec) {
+        cout << a.first << ' ' << a.second<<" | ";
+    }
+    cout << endl;
+}
+
+template<typename T>
+void print(vector<T> vec) {
+    for (auto a : vec) {
+        cout << a << ' ';
+    }
+    cout << endl;
+}
+
+template<typename T>
+void print(vector<vector<T>> vec) {
+    for (const auto &v: vec) {
+        print(v);
+    }
+    cout << endl;
+}
+
 class Solution {
 public:
     //005 Find the longest Palindrome
@@ -565,7 +588,7 @@ public:
 
         auto t = head;
         while (--n && t->next)
-           t = t->next;
+            t = t->next;
         if (n) return NULL;  //Over-range
         auto target = t->next;
         t->next = target->next;
@@ -965,65 +988,131 @@ public:
     }
 
     //036
-    void clear(map<char, int> &tMap){
-        for (auto t : tMap)
-            t.second = 0;
-    }
-
     bool checkValid(const map<char, int> &tMap) {
         for (auto t : tMap)
-            if (t.second > 1)
+            if (t.first != '.' && t.second > 1)
                 return false;
         return true;
     }
 
-    bool isValidSudoku(vector<vector<char>>& board) {
-        int colSize = board.size(), rowSize = board[0].size();
-        map<char, int> countMap{{'1', 0}, {'2', 0}, {'3', 0},
-                                {'4', 0}, {'5', 0}, {'6', 0},
-                                {'7', 0}, {'8', 0}, {'9', 0}};
-
-        //by row
-        for (int i = 0; i < colSize; i++)
-        {
-            clear(countMap);
-            for (auto s : board[i])
-            {
-                if (s != '.')
-                    ++countMap[s];
-            }
-            if (!checkValid(countMap))
-                return false;
-        }
-
-        //by col
-        for (int i = 0; i < colSize; i++)
-        {
-            clear(countMap);
-            for (int j = 0; j < rowSize; j++)
-                if (board[j][i] != '.')
-                    ++countMap[board[j][i]];
-            if (!checkValid(countMap))
-                return false;
-        }
-
-        //by grid
+    bool isValidSudoku(vector<vector<char>>& board) {   //One-time traversal way
+        vector<map<char, int> > colVec(9), rowVec(9), gridVec(9);
         for (int i = 0; i < 9; i++)
         {
-            clear(countMap);
-            int cRow = i / 3, cCol = i - cRow * 3;
-            for (int j = 0; j < 3; j++)
-                for (int k = 0; k < 3; k++)
+            for (int j = 0; j < 9; j++)
+            {
+                auto cVal = board[i][j];
+                ++((colVec[i])[cVal]);
+                ++((rowVec[j])[cVal]);
+                int indexOfGrid = i / 3 * 3 + j / 3;
+                ++((gridVec[indexOfGrid])[cVal]);
+            }
+        }
+
+        for (auto s: colVec)
+            if (!checkValid(s))
+                return false;
+        for (auto s: rowVec)
+            if (!checkValid(s))
+                return false;
+        for (auto s: gridVec)
+            if (!checkValid(s))
+                return false;
+
+        return true;
+    }
+
+    bool isValidSudoku2(vector<vector<char>>& board) {
+        int xsp[9][9] = {0};  //row means which number, col means which row/col/grid, each one means the count of which number
+        int ysp[9][9] = {0};
+        int lsp[9][9] = {0};
+        for(int i = 0; i < 9; i++)
+        {
+            for(int j = 0; j < 9; j++)
+            {
+                if(board[i][j] != '.')
                 {
-                    auto c = board[j + cRow * 3][ k + cCol * 3];
-                    if (c != '.')
-                        ++countMap[c];
+                    if(( ++xsp[board[i][j]-'1'][i] > 1) ||
+                       ( ++ysp[board[i][j]-'1'][j] >1) ||
+                       ( ++lsp[board[i][j]-'1'][(i / 3) * 3 + j / 3] >1))   //Core way to save time——add and judge at same time
+                        return false;
                 }
-            if (!checkValid(countMap))
+            }
+        }
+        return true;
+    }
+
+    //037
+    using Point = pair<int, int>;
+    bool check(int row, int col, char value, vector<vector<char>> &board) {
+        int grid_row = row / 3;
+        int grid_col = col / 3;
+        for (int i = grid_row * 3; i < (grid_row + 1) * 3; i++) {
+            for (int j = grid_col * 3; j < (grid_col + 1) * 3; j++) {
+                if (value == board[i][j])
+                    return false;
+            }
+        }
+
+        for (int i = 0; i < 9; i++) {
+            if (value == board[i][col])
                 return false;
         }
 
+        for (int j = 0; j < 9; j++) {
+            if (value == board[row][j])
+                return false;
+        }
         return true;
+    }
+
+    Point getNext(int row, int col, vector<vector<char>> &board) {
+        Point next = {-1, -1};
+        if (row != 9 && col != 9) {
+            for (int j = col; j < 9; j++) {
+                if (board[row][j] == '.') return make_pair(row, j);
+            }
+            for (int i = row + 1; i < 9; i++)
+                for (int j = 0; j < 9; j++) {
+                    if (board[i][j] == '.') return make_pair(i, j);
+                }
+        }
+        return next;
+    }
+
+    bool dfs(int row, int col, vector<vector<char>> &board, vector<Point> &stack) {
+        auto p = getNext(row, col, board);
+        if (p.first == -1) {
+            return true;
+        }
+        bool is_check = false;
+        for (char c = '1'; c <= '9'; c++) {
+            if (check(p.first, p.second, c, board)) {
+                board[p.first][p.second] = c;
+                stack.emplace_back(p.first, p.second);
+                print(stack);
+                print<char>(board);
+                if (p.second + 1 == 9) {
+                    is_check = dfs(p.first + 1, 0, board, stack);
+                } else {
+                    is_check = dfs(p.first, p.second + 1, board, stack);
+                }
+            }
+        }
+        // 运行到这里, 就会出现没有一个数可以填入当前空, 弹栈
+        if (!is_check) {
+            auto g = stack[stack.size() - 1];
+            stack.pop_back();
+            board[g.first][g.second] = '.';
+        }
+        return is_check;
+    }
+
+    vector<vector<char>> solveSudoku(vector<vector<char>> &board) {
+        vector<Point> stack;
+        dfs(0, 0, board, stack);
+        //print<char>(board);
+        return board;
     }
 
 
@@ -1262,7 +1351,18 @@ int main(int argc, char *argv[])
     std::cout << "The answer of 033 is:" << solution.search(vector<int>{ 5, 6, 1, 2, 3, 4}, 1) << endl;
     solution.searchRange(vector<int>{ 1}, 1);
     std::cout << "The answer of 035 is:" << solution.searchInsert(vector<int>{ 1, 3, 4, 5, 7, 9}, 4) << endl;
-    std::cout << "The answer of 036 is:" << solution.isValidSudoku(vector<vector<char>>{}) << endl;   //TODO：test here
+    vector<vector<char> > suduku{
+        {'5','3','.','.','7','.','.','.','.'},
+        {'6','.','.','1','9','5','.','.','.'},
+        {'.','9','8','.','.','.','.','6','.'},
+        {'8','.','.','.','6','.','.','.','3'},
+        {'4','.','.','8','.','3','.','.','1'},
+        {'7','.','.','.','2','.','.','.','6'},
+        {'.','6','.','.','.','.','2','8','.'},
+        {'.','.','.','4','1','9','.','.','5'},
+        {'.','.','.','.','8','.','.','7','9'}};
+    std::cout << "The answer of 036 is:" << solution.isValidSudoku(suduku) << endl;
+    solution.solveSudoku(suduku);
 
     return 0;
 }

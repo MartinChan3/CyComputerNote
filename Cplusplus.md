@@ -1110,7 +1110,7 @@ void MainWindow::changeBrush()
 
 142. 使用QLocale去进行自动的国家语言的匹配；     
 
-143. Qt Linguist另一个给的启示就是在编写程序时尽量使用tr()去包含所有的交互的英文，然后在后期进行处理；      
+143. Qt Linguist另一个给的启示就是在编写程序时尽量使用tr()去包含所有的交互的英文，然后在后期进行处理（其实也可以进行中文，再进行其他语言的写入）；      
 
 144. 取余操作结果应始终和被除数相同（除非能整除）；    
 
@@ -1134,6 +1134,6 @@ void MainWindow::changeBrush()
 Example：Leetcode032    
 ![Leetcode032](https://pic.leetcode-cn.com/455a86bf87800938b6dcfecab039e106916df1f9dcdd302ff45d5a2ddedf09dd-%E6%8D%95%E8%8E%B7.PNG)
 
-150. 
+150. [TODO]: 详细探讨下右值引用、std::move以及移动语义/完美转发的原因
 
 
