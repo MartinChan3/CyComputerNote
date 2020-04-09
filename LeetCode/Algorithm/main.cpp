@@ -1108,7 +1108,7 @@ public:
         return is_check;
     }
 
-    vector<vector<char>> solveSudoku(vector<vector<char>> &board) {
+    vector<vector<char> > solveSudoku(vector<vector<char> > &board) {
         vector<Point> stack;
         dfs(0, 0, board, stack);
         //print<char>(board);
