@@ -1043,78 +1043,45 @@ public:
     }
 
     //037
-    using Point = pair<int, int>;
-    bool check(int row, int col, char value, vector<vector<char>> &board) {
-        int grid_row = row / 3;
-        int grid_col = col / 3;
-        for (int i = grid_row * 3; i < (grid_row + 1) * 3; i++) {
-            for (int j = grid_col * 3; j < (grid_col + 1) * 3; j++) {
-                if (value == board[i][j])
-                    return false;
+    void solveSudoku(vector<vector<char>>& board) {
+        backtrack(board,0,0);
+    }
+
+    bool backtrack(vector<vector<char>>& board, int row, int col){
+        if(col == 9)
+            return backtrack(board,row+1,0);
+
+        if(row == 9)
+            return true;
+
+        for(int i = row; i < 9; i++){
+            for(int j = col; j < 9; j++){
+                if(board[i][j] != '.'){
+                    return backtrack(board, i, j + 1);
+                }
+                for(char ch = '1'; ch <= '9'; ch++){
+                    if(!isValid(board, i, j, ch))
+                        continue;
+                    board[i][j] = ch;
+                    if(backtrack(board, i, j + 1))
+                        return true;
+                    board[i][j] = '.';
+                }
+                return false;
+
             }
         }
+        return false;
+    }
 
-        for (int i = 0; i < 9; i++) {
-            if (value == board[i][col])
-                return false;
-        }
-
-        for (int j = 0; j < 9; j++) {
-            if (value == board[row][j])
-                return false;
+    bool isValid(vector<vector<char>>& board, int row, int col, char ch){
+        for(int i = 0; i < 9; i++){
+            if(board[row][i] == ch) return false;
+            if(board[i][col] == ch) return false;
+            if(board[(row/3)*3 + i/3][(col/3)*3 + i%3] == ch) return false;
         }
         return true;
     }
-
-    Point getNext(int row, int col, vector<vector<char>> &board) {
-        Point next = {-1, -1};
-        if (row != 9 && col != 9) {
-            for (int j = col; j < 9; j++) {
-                if (board[row][j] == '.') return make_pair(row, j);
-            }
-            for (int i = row + 1; i < 9; i++)
-                for (int j = 0; j < 9; j++) {
-                    if (board[i][j] == '.') return make_pair(i, j);
-                }
-        }
-        return next;
-    }
-
-    bool dfs(int row, int col, vector<vector<char>> &board, vector<Point> &stack) {
-        auto p = getNext(row, col, board);
-        if (p.first == -1) {
-            return true;
-        }
-        bool is_check = false;
-        for (char c = '1'; c <= '9'; c++) {
-            if (check(p.first, p.second, c, board)) {
-                board[p.first][p.second] = c;
-                stack.emplace_back(p.first, p.second);
-                print(stack);
-                print<char>(board);
-                if (p.second + 1 == 9) {
-                    is_check = dfs(p.first + 1, 0, board, stack);
-                } else {
-                    is_check = dfs(p.first, p.second + 1, board, stack);
-                }
-            }
-        }
-        // 运行到这里, 就会出现没有一个数可以填入当前空, 弹栈
-        if (!is_check) {
-            auto g = stack[stack.size() - 1];
-            stack.pop_back();
-            board[g.first][g.second] = '.';
-        }
-        return is_check;
-    }
-
-    vector<vector<char> > solveSudoku(vector<vector<char> > &board) {
-        vector<Point> stack;
-        dfs(0, 0, board, stack);
-        //print<char>(board);
-        return board;
-    }
-
 
     //024 Swap pairs
     ListNode* swapPairs(ListNode* head) {

@@ -519,7 +519,7 @@ bind1st和bind2nd的根本作用在于将二元仿函数化为一元仿函数，
 - 线程在stl中的概念和使用；
 - 对应在Qt当中的实现；
 
-76. C/C++被设计为一门由右向左的设计语言，这意味着先从一行的最右侧开始考虑；
+76. C/C++被设计为一门由右向左的设计语言，这意味着先从一行的最右侧开始考虑；（并不完全是这样，在某些特定逻辑符号的语句中就不符合）
 
 77. C++的堆基础知识：
 堆(heap)首先不是一个容器，而是一种数据组织方式；堆是一种完全二叉树(叶节点只发生在最后一层，若倒数第二层都有左右子叶，那么算是满二叉树)。   
@@ -1145,5 +1145,87 @@ Example：Leetcode032
 - std::forward()和universal references通用引用共同实现完美转发；
 - 用emplace_back()替换push_back()来增加性能（避免拷贝赋值函数多次执行）；
 
-151.
+151. [回溯算法](https://mp.weixin.qq.com/s?__biz=MzAxODQxMDM0Mw==&mid=2247484709&idx=1&sn=1c24a5c41a5a255000532e83f38f2ce4&chksm=9bd7fb2daca0723be888b30345e2c5e64649fc31a00b05c27a0843f349e2dd9363338d0dac61&scene=21#wechat_redirect )    
 
+解决一个回溯问题，实际上就是一个决策树的遍历过程，你只需要考虑3个问题：   
+- 路径：就是已经做出的选择；
+- 选择列表：也就是你当前可以做的选择；
+- 结束条件：也就是到达决策树底层，无法再做选择的条件；    
+首先是回溯类代码的框架：    
+```
+result = []
+def backtrack(路径, 选择列表)：
+	if 满足结束条件:
+		result.add(路径)
+		return
+	
+	for 选择 in 选择列表:
+		做选择
+		backtrack(路径，选择列表)
+		撤销选择
+```   
+**核心就是for循环里面的递归，在递归调用之前做选择，在递归调用之后“撤销选择”**
+其实该过程非常类似二叉树的遍历框架：   
+```
+void traverse(TreeNode root) {
+	for (TreeNode child: root.children)
+	{
+		//前序遍历的操作
+		traverse(child);
+		//后序遍历的操作
+	}
+}
+```   
+前序遍历就是代码在进入某一个结点之前执行，而后序遍历代码在离开某个节点之后的那个时间点执行。    
+![前序遍历和后序遍历](https://mmbiz.qpic.cn/sz_mmbiz_jpg/gibkIz0MVqdF1umAdyXuPq54ibw7X23mnajTgCl3dL1z2wJpbvdfiaM1dMuCqPOO5JxicOgiaQAmQBJfZCwAbIxfFmQ/640?wx_fmt=jpeg&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1 )    
+就像上文说的那样，“路径”和“选择”是每个节点的属性，函数在树上游走要正确维护结点的属性，就要在这两个特殊事件点搞点动作：    
+![选择内容](https://mmbiz.qpic.cn/sz_mmbiz_jpg/gibkIz0MVqdF1umAdyXuPq54ibw7X23mnaR2cbSJabtrWQtib7OP5ZrSicZY2IOZibsia5dlibcvWhlQC1TibO97yia6mQA/640?wx_fmt=jpeg&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1 )    
+现在再回来看回溯算法的核心：    
+```
+for 选择 in 选择列表:    
+	# 做选择
+	将该选择从选择列表移除
+	路径.add(选择)
+	backtrack(路径，选择列表)
+	#撤销选择
+	路径.remove(选择)
+```    
+**我们只要在递归之前做出选择，在递归之后撤销刚刚的选择**就能得到每个节点的选择列表和路径。来看下全排列的代码：    
+```
+List<List<Integer>> res = new LinkedList<>();
+
+/* 主函数，输入一组不重复的数字，返回它们的全排列 */    
+List<List<Integer>> permute(int[] nums) {
+	//记录路径
+	LinkedList<Integer> track = new LinkedList<>();
+	backtrack(nums, track);
+	return res;
+}
+
+//路径：记录在track中
+//选择列表：nums中不存在于track的那些元素
+//结束条件：nums中元素全都在track中出现
+void backtrack(int[] nums, LinkedList<Integer> track)
+{
+	//触发结束条件
+	if (track.size() == nums.length) {
+		res.add(new LinkedList(track));
+		return;
+	}
+	
+	for (int i = 0; i < nums.length; i++) {
+		//排除不合法的选择
+		if (track.contains(nums[i]))
+			continue;
+		//做选择
+		track.add(nums[i]);
+		//进入下一层决策树
+		backtrack(nums, track);
+		//取消选择
+		track.removeLast();
+	}
+	
+}
+```    
+这里稍微做了点变通，没有显式记录“选择列表，而是通过nums和track的推导出当前的选择列表；    
+![推导实例](https://mmbiz.qpic.cn/sz_mmbiz_jpg/gibkIz0MVqdF1umAdyXuPq54ibw7X23mnaWuNCGdIXFoeBp1U7IA4tSEz1Pia9VvK2H9mSib1Mch3Yb5V8PCHib8dog/640?wx_fmt=jpeg&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1 )    
