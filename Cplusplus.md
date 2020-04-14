@@ -744,7 +744,7 @@ Qt是基于事件驱动的框架，事件和事件传递在其中非常重要。
 事件能够程序内部和外部产生，举个例子：   
 - QKeyEvent和QMouseEvent对象代表了一个键盘和鼠标事件，它们从窗口由用户的操作而产生。   
 - QTimerEvent对象是当某个事件被激发时投入，它们由操作系统产生。   
-- QChildEvent对象是当一个子窗口被添加或者移除时被送入QObject的，它们的源头是Q他程序自己。   
+- QChildEvent对象是当一个子窗口被添加或者移除时被送入QObject的，它们的源头是Qt程序自己。   
 事件的重点是它们产生的时候并不会被直接传递，而是会先进入事件队列，某时刻会被传递。传送者自己循环事件队列并且把事件传递给目标的QObject对象，因此被称作为事件循环。概念上说，时间循环就像这个：   
 ```
 while (is_active)
@@ -1228,4 +1228,42 @@ void backtrack(int[] nums, LinkedList<Integer> track)
 }
 ```    
 这里稍微做了点变通，没有显式记录“选择列表，而是通过nums和track的推导出当前的选择列表；    
-![推导实例](https://mmbiz.qpic.cn/sz_mmbiz_jpg/gibkIz0MVqdF1umAdyXuPq54ibw7X23mnaWuNCGdIXFoeBp1U7IA4tSEz1Pia9VvK2H9mSib1Mch3Yb5V8PCHib8dog/640?wx_fmt=jpeg&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1 )    
+![推导实例](https://mmbiz.qpic.cn/sz_mmbiz_jpg/gibkIz0MVqdF1umAdyXuPq54ibw7X23mnaWuNCGdIXFoeBp1U7IA4tSEz1Pia9VvK2H9mSib1Mch3Yb5V8PCHib8dog/640?wx_fmt=jpeg&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1 )     
+至此，我们通过全排列问题来了解了回溯算法的底层原理。当然，这个算法不是很高效的，是因为contains方法需要O(N)时间的复杂度。    
+但是必须说明的是，不管怎么优化，都符合回溯框架，而且时间复杂度都不可能低于O(N!)，因为穷举整棵决策树是无法避免的，**这也是回溯算法的一个特点，不像动态规划存在重叠子问题可以优化，回溯算法就是纯暴力穷举，复杂度一般都很高**。     
+进而衍生的第二个问题则为经典的8皇后问题，直接套用框架看看：    
+```
+vector<vector<string>> res;
+
+/* 输入棋盘边长 n，返回所有合法的放置 */
+vector<vector<string>> solveNQueens(int n) {
+    // '.' 表示空，'Q' 表示皇后，初始化空棋盘。
+    vector<string> board(n, string(n, '.'));
+    backtrack(board, 0);
+    return res;
+}
+
+// 路径：board 中小于 row 的那些行都已经成功放置了皇后
+// 选择列表：第 row 行的所有列都是放置皇后的选择
+// 结束条件：row 超过 board 的最后一行
+void backtrack(vector<string>& board, int row) {
+    // 触发结束条件
+    if (row == board.size()) {
+        res.push_back(board);
+        return;
+    }
+
+    int n = board[row].size();
+    for (int col = 0; col < n; col++) {
+        // 排除不合法选择
+        if (!isValid(board, row, col)) 
+            continue;
+        // 做选择
+        board[row][col] = 'Q';
+        // 进入下一行决策
+        backtrack(board, row + 1);
+        // 撤销选择
+        board[row][col] = '.';
+    }
+}
+```

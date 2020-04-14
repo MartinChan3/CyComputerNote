@@ -1049,7 +1049,7 @@ public:
 
     bool backtrack(vector<vector<char>>& board, int row, int col){
         if(col == 9)
-            return backtrack(board,row+1,0);
+            return backtrack(board, row + 1, 0);
 
         if(row == 9)
             return true;
