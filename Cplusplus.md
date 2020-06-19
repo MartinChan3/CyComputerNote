@@ -1266,4 +1266,6 @@ void backtrack(vector<string>& board, int row) {
         board[row][col] = '.';
     }
 }
-```
+```   
+
+152. QSharedPointer有一个比较明显的缺点是在于QObject::connect中不能使用，只能够使用对应的data()来暴露一个普通的指针；[或者使用注册的方式](https://blog.csdn.net/zhangbinsijifeng/article/details/50501645?utm_source=blogxgwz8 )

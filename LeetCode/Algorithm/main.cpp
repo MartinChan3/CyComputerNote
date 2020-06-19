@@ -1083,6 +1083,11 @@ public:
         return true;
     }
 
+    //038
+    string countAndSay(int n) {
+
+    }
+
     //024 Swap pairs
     ListNode* swapPairs(ListNode* head) {
         if (!head || head->next == NULL) return head;
