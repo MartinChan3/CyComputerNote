@@ -1269,3 +1269,7 @@ void backtrack(vector<string>& board, int row) {
 ```   
 
 152. QSharedPointer有一个比较明显的缺点是在于QObject::connect中不能使用，只能够使用对应的data()来暴露一个普通的指针；[或者使用注册的方式](https://blog.csdn.net/zhangbinsijifeng/article/details/50501645?utm_source=blogxgwz8 )
+
+153. QSharedPointer的使用另一个值得注意的点是：因为QSharedPointer为使用即初始化，所以必须包含一个类的头文件，这一定程度上和类前置声明以及减少头文件包括的接口化要求相冲突，这要求我们尽可能在**类成员变量中尽量减少使用QSharedPointer**,而在函数使用过程中尽可能多的使用QSharedPointer。
+
+154. QScopedPointer类似unique_ptr，只能有一份拷贝，并且出函数范围自动释放，Qt还提供了QScopedArrayPointer来针对数组进行相关的管理。这里可以看出，智能指针的使用往往是局部的。
