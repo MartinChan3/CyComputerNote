@@ -1272,4 +1272,24 @@ void backtrack(vector<string>& board, int row) {
 
 153. QSharedPointer的使用另一个值得注意的点是：因为QSharedPointer为使用即初始化，所以必须包含一个类的头文件，这一定程度上和类前置声明以及减少头文件包括的接口化要求相冲突，这要求我们尽可能在**类成员变量中尽量减少使用QSharedPointer**,而在函数使用过程中尽可能多的使用QSharedPointer。
 
-154. QScopedPointer类似unique_ptr，只能有一份拷贝，并且出函数范围自动释放，Qt还提供了QScopedArrayPointer来针对数组进行相关的管理。这里可以看出，智能指针的使用往往是局部的。
+154. QScopedPointer类似unique_ptr，只能有一份拷贝，并且出函数范围自动释放，Qt还提供了QScopedArrayPointer来针对数组进行相关的管理。这里可以看出，智能指针的使用往往是局部的。    
+
+155. 注意：QSharedPointer的create()方法并不能保证完全复制，它只是创建一个新的内存中的对象，所以更应该注意其赋值的特性；（是否需要拷贝赋值函数）    
+
+156. 回调函数的局限性：回调函数只能是全局函数或者static函数，这无疑增加了使用的局限性。一个比较简单的方法是使用std::function和std::bind进行传入：    
+```
+#include <functional>
+typedef std::function<void(const QJsonObject &)> callBackFun;
+//定义
+class Processor
+{
+	void setStatusCallBack(callBackFun &);
+}
+//使用
+using namespace std::placeholders;
+processor->setStatusCallBack(std::bind(&XXXX::statusCallBack, this, _1));
+```    
+
+157. 模二运算：是指**非进位**的二进制计算，是CRC及众多计算机算法的基础算法；[模二算法](https://baike.baidu.com/item/%E6%A8%A12%E8%BF%90%E7%AE%97/18556715?fr=aladdin )     
+
+158. 
