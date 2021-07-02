@@ -1292,4 +1292,104 @@ processor->setStatusCallBack(std::bind(&XXXX::statusCallBack, this, _1));
 
 157. 模二运算：是指**非进位**的二进制计算，是CRC及众多计算机算法的基础算法；[模二算法](https://baike.baidu.com/item/%E6%A8%A12%E8%BF%90%E7%AE%97/18556715?fr=aladdin )     
 
-158. 
+158. Qt里另一个常见的发布陷阱在于，它不会给你拷贝qsqlite等sql的库，需要你自己从sqldrivers中进行拷贝。
+
+159. 接口的合并尽量精简，使用private类来简化头文件的包含关系。   
+
+160. 高斯滤波一个降低计算时间的方法是将一个双边的滤波，减少为两个单边的滤波过程。    
+
+161. QOpenGL系统想要实现次线程渲染，必然需要几个步骤：
+1) 在主线程创建QSurface(QOffscreenSurface)；
+2) 在主线程创建QOpenGLContext，用于共享至次线程使用；
+3) 在次线程内容中初始化QOpenGLContext，并且设定为setShareContext。
+4) 需要在主线程中使用全部初始化完毕QOpenGLContext并makeCurrent。
+
+162. 注意resource文件中文件使用时，前缀引用要添加冒号(:/xxxx.xxx)
+
+163. 注意QOpenGL的离屏渲染必须使用QGuiApplication进行引用和处理；
+
+164. 一定要养成泛型编程的思路，其中有一个就是排序等算法使用sort和比较符，此外使用erase和unique混用来实现非内容的排序；[erase和unique混合删除队列中元素](https://www.cnblogs.com/wangkundentisy/p/9033782.html)
+
+165. QOpenGL中如果想要使用QOpenGLFramebuffer::texture()功能来进行纹理的提取，其属性必须是NoAttachment，这里面一个诀窍就在于使用blit()函数，临时创建一个NoAttatchment的FBO，来进行值的赋予(纹理的获取)。
+
+166. 指针的引用写法为``int *&pref = pointer;``
+
+167. undef和ifdef是相对的，可以去除已经define的内容；
+
+169. Lambda表达式的槽函数，并非以现有的Thread为执行，这一点值得注意，尤其是对于包含opengl context的程序；
+
+170. 半透明的物体从远到进画; 不透明的物体从近到远画; 先画不透明物体, 再画透明物体;
+
+171. 牢记Qt一个原则是，如果在一个线程里面一个QObject被创建，那么它在事件循环中执行槽函数时，一定是在它**被创建的线程执行**，除非使用了moveToThread；   
+
+172. 注意以后QCoreApplication中间不要创建QOffscreenSurface，创建时会出现无法d->screen的情况，需要使用QGuiAplication或者QApplication。
+
+173. 日后Qt release需要进行编译时debug，需要在qmake配置中添加"CONFIG+=force_debug_info" "CONFIG+=separate_debug_info"即可。
+
+174. 关于canonicalPath的解释，简答来说是absolutePath即为绝对路径（可规范可不规范）、canonicalPath为绝对规范路径、path无任何限制。
+
+175. 经典bind例子(占位符及调用)（[CSDN](https://blog.csdn.net/u013654125/article/details/100140328 )）：
+```
+#include <QCoreApplication>
+#include <iostream>
+#include <functional>
+using namespace std;
+
+int TestFunc(int a, char c, float f)
+{
+    cout << a << endl;
+    cout << c << endl;
+    cout << f << endl;
+
+    return a;
+}
+
+int main(int argc, char *argv[])
+{
+    QCoreApplication a(argc, argv);
+
+    auto bindFunc1 = bind(TestFunc, std::placeholders::_1, 'A', 100.1);
+    bindFunc1(10);
+
+    cout << "=================================\n";
+
+    auto bindFunc2 = bind(TestFunc, std::placeholders::_2, std::placeholders::_1, 100.1);
+    bindFunc2('B', 10);
+
+    cout << "=================================\n";
+
+    auto bindFunc3 = bind(TestFunc, std::placeholders::_2, std::placeholders::_3, std::placeholders::_1);
+    bindFunc3(100.1, 30, 'C');
+
+    return a.exec();
+
+	/**** Result
+	10
+	A
+	100.1
+	=================================
+	10
+	B
+	100.1
+	=================================
+	30
+	C
+	100.1
+	****/
+}
+```
+
+176. Qt的核心思想之一：事件循环和多线程的关系；[事件循环以及多线程关系](https://blog.csdn.net/zxh2075/article/details/50574741 )    
+
+177. [QEvent事件机制解析](https://blog.csdn.net/xiaoyink/article/details/79398953 )
+
+178. 巧用槽的技术之一:connectSlotByName，直接通过函数名来遍历到内容(即on_pushButton_clicked())
+
+179. 槽函数的Lambda只支持第二种写法，及第一个信号必须是简略写法；
+
+180. C语言中#及##在宏中的用法[CSDN](https://blog.csdn.net/q2519008/article/details/80934815 )
+
+181. ``qSetMessagePattern( "%{time hh:mm:ss.zzz}: %{message}" );``通过qSetMessagePattern来进行输出内容的规范管理；   
+
+182. 
+
