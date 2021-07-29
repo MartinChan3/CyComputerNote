@@ -1391,5 +1391,11 @@ int main(int argc, char *argv[])
 
 181. ``qSetMessagePattern( "%{time hh:mm:ss.zzz}: %{message}" );``通过qSetMessagePattern来进行输出内容的规范管理；   
 
-182. 
+182. 一种基于位来判断的选项是否存在的方法：
+```
+enum InitOptions {ioReverseSolution = 1, ioStrictlySimple = 2, ioPreserveCollinear = 4};
+(initOptions & ioStrictlySimple) != 0 //用于看某个选项是否有启用
+```   
+
+183. 取整：static_cast<int>(val + 0.5);(负数的话就是static_cast<int>(val - 0.5))
 
