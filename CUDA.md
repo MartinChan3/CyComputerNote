@@ -2073,19 +2073,780 @@ wrapID = threadIdx.x / 32;
 例如线程块中的线程1和线程33都由束内线程ID 1，但它们有不同的线程束ID。对于二维线程块，可以将二维线程坐标转为一维线程索引，并且应用前面的公式来确定束内线程和线程束的索引。      
 
 ### 5.6.1 线程束洗牌指令的不同形式     
-有两组洗牌指令
+有两组洗牌指令:一组用于整型变量，另一组用于浮点型变量。每组有4中形式的指令洗牌。在线程束内交换整形变量，其基本函数标记如下：    
+```cpp
+int __shlf(int var, int srcLane, int width = wrapSize);    
+```     
+内部指令__shlf的返回值为var，var通过由srcLane确定的同一线程束中的线程传递给__shfl。srcLane的含义变化取决于宽度值，这个函数能使线程束的每个线程都可以直接从一个特定的线程中获取某个值。线程束内所有活跃的线程都能产生此操作，这将导致每个线程中有4字节数据的移动。      
+变量width可被设置为2~32之间2的任何指数（包括2和32），这是可选的。当设置为默认的wrapSize（即32），洗牌指令跨整个线程束来执行，并且srcLane指定源线程的束内线程索引。然而，设置width允许将线程束细分为段，使每段含有width个线程，并且在每个段上执行独立地洗牌操作。对于不是32的其他width值，线程的束内线程ID和其在洗牌操作中的ID不一定相同。这种情况下，一维线程块中的线程洗牌ID可按照以下公式进行计算：    
+```cpp
+shuffleID = threadIdx.x % width;
+```    
+例如，如果shfl被线程束中的每个线程通过以下参数进行调用：    
+```cpp
+int y = shfl(x, 3, 16);
+```     
+那么线程0~15将从线程3接受x的值，线程16~31将从线程19接收x的值（在线程束的前16个线程中偏移量为3）。为了简单起见，srcLane将被称为在本节的其余部分提到过的束内线程索引。       
+当传递给shfl的束内线程索引与线程束中所有的线程的值相同时，指令从特定的束内线程到线程束中所有线程都执行线程束广播操作。     
+![20210901100545](https://i.loli.net/2021/09/01/8RAyndw6KULaFri.png)    
+洗牌操作的另一种形式是从与调用线程相关的线程中复制数据：     
+```cpp
+int __shfl__up(int var, unsigned int delta, int width = wrapSize);
+```     
+__shfl_up通过减去调用的束内线程索引delta来计算源束内线程索引。返回由源县城所持有的值。因此，这一指令通过束内线程delta将var右移到线程束中。__shfl_up周围没有线程束，所以线程束中最低的线程delta将保持不变。    
+![20210901101100](https://i.loli.net/2021/09/01/yK8hLnz3qtZYcXM.png)     
+相反，洗牌指令的第三种形式从相对于调用线程而言具有高索引值的线程中复制：    
+```cpp
+int __shfl_down(int var, unsigned int delta, int width = wrapSize);
+```     
+__shfl_down通过给调用的束内线程索引来增加delta来计算源束内线程索引。返回由源线程持有的值。因此，该指令通过束内线程delta将var的值左移到线程束中。使用__shfl_down时周围没有线程束，所以线程束中最大的束内线程delta将保持不变。     
+![20210901101530](https://i.loli.net/2021/09/01/MRPEwl4vNbDIrhU.png)
+洗牌指令的最后一种形式是根据调用束内线程索引自身的按位异或来传输束内线程中的数据：    
+```cpp
+int __shfl__xor(int var, int laneMask, int width = warpSize);
+```     
+通过使用laneMask执行调用束内线程索引的按位异或，内部指令可计算源束内线程索引。返回由源线程持有的值。该指令适合于蝴蝶寻址模式，如下图：     
+![20210901101945](https://i.loli.net/2021/09/01/q7MsRHlEZ2Yv4Ti.png)     
+在本节讨论的所有洗牌函数还支持单精度浮点值，并返回一个浮点数。      
+
+### 5.6.2 线程束内的共享数据      
+在本节中，会介绍几个有关线程束洗牌指令的例子，并指出用该方法的优点。洗牌指令将会被应用到以下三种整数变量类型中：     
+- 标量变量
+- 数组
+- 向量型变量
+
+#### 5.6.2.1 跨线程束的广播      
+下面的内核实现了线程束级的广播操作。每个线程有一个寄存器变量value。源束内线程由变量srcLane指定，它等同于跨所有线程。每个线程都直接从源线程复制数据。     
+```cpp
+__global__ void test_shfl_broadcast(int *d_out, int *d_in, int const srcLane)
+{
+    int value = d_in[threadIdx.x];
+    value = __shfl(value, srcLane, BDIMX);
+    d_out[threadIdx.x] = value;
+}
+```    
+为了简单起见，使用有16个线程的一维线程块：    
+``#define BDIMX 16``    
+调用内核的方法如下，通过第三个参数test_shfl_broadcast将源束内线程设置为每个线程束内的第三个线程。全局内存的亮片被传递到内核： 输入数据和输出数据。     
+```cpp
+test_shfl_broadcast<<<1, BDIMX>>>(d_outData, d_inData, 2);
+```      
+
+#### 5.6.2.2 线程束内上移     
+下面的内核实现了洗牌上移的操作，操作线程束当中每个源束内线程都是独一无二的，并由它自身的线程索引减去delta来确定。    
+```cpp
+__global__ void test_shfl_up(int *d_out, int *d_in, unsigned int const delta)
+{
+    int value = d_in[threadIdx.x];
+    value = __shfl_up(value, delta, BDIMX);
+    d_out[threadIdx.x] = value;    
+}
+```
+通过制定delta = 2来调用内核：     
+![20210901110400](https://i.loli.net/2021/09/01/QDwK9Fkbolz4Wni.png)     
+**其结果是，每个线程的值向右移动两个线程，结果如下，最左边的两个束内线程值保持不变**。      
+
+#### 5.6.2.3 线程束内下移      
+同上，每个线程的值向左移动两个束内线程，最右边的两个束内线程值保持不变：    
+![20210901110653](https://i.loli.net/2021/09/01/bwyqSk2WXUth8JT.png)     
+
+#### 5.6.2.4 线程束内环绕移动     
+```cpp
+__global__ void test_shfl_wrap(int *d_out, int *d_in, int const offset)
+{
+    int value = d_in[threadIdx.x];
+    value = __shfl(value, threadIdx.x + offset, BDIMX);    
+    d_out[threadIdx.x] = value;
+} 
+```      
+通过一个负偏移量来调用来调用内核：     
+``test_shfl_wrap<<<1, block>>>(d_outData, d_inData, -2);``     
+这个内核实现了环绕右移操作：     
+![20210901111927](https://i.loli.net/2021/09/01/ITlYBaj39yPxGK2.png)     
+
+#### 5.6.2.5 跨线程束的蝴蝶交换     
+```cpp
+__global__ void test_shfl_xor(int *d_out, int *d_in, int const mask)
+{
+    int value = d_in[threadIdx.x];
+    value = __shfl_xor(value, mask, BDIMX);
+    d_out[threadIdx.x] = value;
+}     
+```    
+调用掩码值为1的内核：``test_shfl_xor<<<1, BDIMX>>>(d_outData, d_inData, 1);``      
+![20210901112528](https://i.loli.net/2021/09/01/6YQBmZ8l7AIrxRG.png)     
+
+#### 5.6.2.6 跨线程束交换数值      
+```cpp
+__global__ void test_shfl_xor_array(int *d_out, int *d_in, int const mask)
+{
+    int idx = threadIdx.x * SEGM;
+    int value[SEGM];
+    
+    for (int i = 0; i < SEGM; i++) value[i] = d_in[idx + 1];
+
+    value[0] = __shfl_xor(value[0], mask, BDIMX);
+    value[1] = __shfl_xor(value[1], mask, BDIMX);
+    value[2] = __shfl_xor(value[2], mask, BDIMX);
+    value[3] = __shfl_xor(value[3], mask, BDIMX);
+    for (int i = 0; i < SEGM; i++) d_out[idx + i] = value[i];
+}
+```     
+数组大小由下面宏设定为4：    
+``#define SEGM 4``    
+因为每个线程有4个元素，所以线程块缩小到原来大小的1/4。调用核函数如下所示：   
+```cpp
+test_shfl_xor_int4<<<1, BDIMX / SEGM>>>(d_outData, d_inData, 1);
+```    
+因为掩码被定为1， 所以相同的线程交换其数组值，如下所示：    
+![20210901114408](https://i.loli.net/2021/09/01/eTpzrtiBUXumoHF.png)     
+
+#### 5.6.2.7 跨线程束使用数组索引交换数值     
+在之前的内核中，通过吸盘操作交换的数组元素在每个线程的本地数组中有相同的偏移量。如果想在两个线程各自数组中以不同的偏移量交换它们之间的元素，需要有基于洗牌指令的交换函数。     
+下面的函数交换了两个线程间的一对值：      
+```cpp
+__inline__ __device__ void swap(int *value, int laneIdx, int mask, int firstIdx, int secondIdx) 
+{
+    bool pred = ((laneIdx / mask + 1) == 1);
+    if (pred) 
+    {
+        int tmp = value[firstIdx];
+        value[firstIdx] = value[secondIdx];
+        value[secondIdx] = tmp;
+    }
+
+    value[secondIdx]=__shfl_xor(value[secondIdx], mask, BDIMX);
+
+    if (pred)
+    {
+        int tmp = value[firstIdx];
+        value[firstIdx] = value[secondIdx];
+        value[secondeIdx] = tmp;
+    }
+}
+```    
+以下内核基于上述的交换函数，交换两个线程间不同偏移的两个元素。     
+```cpp
+__global__ void test_shfl_swap(int *d_out, int *d_in, int const mask, int first, int secondIdx)
+{
+    int idx = threadIdx.x * SEGM;
+    int value[SEGM];
+
+    for (int i = 0; i < SEGM; i++) value[i] = d_in[idx];
+
+    swap(value, threadIdx.x, mask, firstIdx, secondIdx);
+    
+    for (int i = 0; i < SEGM; i++) d_out[idx + i] = value[i];
+}
+```     
+例如指定掩码为1，第一个索引为0、第二个索引为3调用内核：     
+``test_shfl_swap<<<1, block / SEGM>>>(d_outData, d_inData, 1, 0, 3);``
+![20210901133111](https://i.loli.net/2021/09/01/Y6CV82WLcx4i9fh.png)    
+
+### 5.6.3 使用线程束洗牌指令的并行规约     
+本节介绍如何使用线程束洗牌指令来解决同样的问题。包含三个级别的规约：    
+- 线程束级规约    
+- 线程块级规约    
+- 网格级规约     
+一个线程块中可能有几个线程束。对于线程束规约来说，每个线程束执行自己的规约，每线程不使用共享内存，而是使用寄存器存储一个从全局内存中读取数据的数据元素：    
+``int mySum = g_idata[idx];``     
+线程束级规约作为一个内联函数实现，如下所示：     
+```cpp
+__inline__ __device__ int warReduce {
+    mySum += __shfl_xor(mySum, 16);
+    mySum += __shfl_xor(mySum, 8);
+    mySum += __shfl_xor(mySum, 4);
+    mySum += __shfl_xor(mySum, 2);
+    mySum += __shfl_xor(mySum, 1);
+    return mySum;
+}
+```    
+在这个函数返回之后，每个线程束的总和保存到基于线程索引和线程束大小的共享内存中，如下所示：     
+```cpp
+int laneIdx = threadIdx.x % warpSize;
+int warpIdx = threadIdx.x / warpSize;
+mySum = warpReduce(mySum);
+if (laneIdx == 0) smem[warpIdx] = mySum;   
+```     
+对于线程块规约，先同步块，然后使用相同的线程束规约函数将每个线程束的综合进行相加。之后，由线程块产生的最终输出由块中的第一个线程保存到全局内存中，如下所示：   
+```cpp
+__syncthreads();
+mySum = (threadIdx.x < SMEMDIM) ? smem[laneIdx] : 0;
+
+if (warpIdx == 0) mySum = warpReduce(mySum);
+if (threadIdx.x == 0) g_odata[blockIdx.x] = mySum;
+```    
+实验结果证明使用洗牌指令，线程束级并行规约获得了1.42倍的加速。     
+     
+      
+# 第6章 流和并发     
+截止目前都是只关注内核级的并发，在这个级别的并发中，单一的任务或内核被GPU的多个线程并行执行。前面几章已介绍了提升内核性能的几种方法，它们分别是从编程模型、执行模型和内存模型的角度进行介绍的。想必你已经了解了一些通过命令行性能分析器来研究和分析内核行为的方法。      
+本章着重研究网格级别的并发，在网格级并发中，多个内核会在同一设备上同时执行，这往往会让设备利用率更好。在本章中，你将学习到如何使用CUDA流实现网格级的并发，还想使用CUDA的可视化性能分析器nvvp将内核并发执行可视化。      
+
+## 6.1 流和事件概述      
+CUDA流是一系列异步的CUDA操作，这些操作按照主机代码却确定的顺序在设备上执行。流能够封装这些操作，保持操作的顺序，允许操作在流中排队，并使它们在先前的所有操作之后执行，并且可以查询排队操作的状态。这些操作包括在主机和设备之间进行传输，内核启动一级大多数由主机发起但是由设备处理的其他命令。流中操作的执行相对于主机总是异步的。CUDA运行时决定何时可以在设备上执行操作。我们的任务是使用CUDA的API来确保一个异步操作在运行结果被使用之前可以完成。在同一个CUDA流中的操作有严格的顺序，而在不同的CUDA流中的操作在执行顺序上不受限。使用多个流同事启动多个内核，可以实现网格级并发。     
+因为所有在CUDA流中排队的操作都是异步的，所以在主机与系统设备中可以重叠执行其他操作。作为在同一时间内将流中排队的操作与其他有用的操作一起执行，可以隐藏哪些操作的开销。      
+在本书中，CUDA编程的一个典型模式是以下形式：    
+1. 将输入数据从主机移到设备上；    
+2. 在设备上执行一个内核；    
+3. 把结果从设备移回主机中；     
+在许多情况下，执行内核比传输数据耗时更多，这种情况下，可以完全隐藏CPU和GPU之间的延迟通信，通过内核执行和数据传输调度到不同的流中，这些操作可以重叠，程序的总运行时间会被缩短。流在CUDA的API调用粒度上可以实现流水线或者双缓冲技术。     
+CUDA的API函数一般可以分为同步或者异步，具有同步行为的函数会阻塞主机端线程，直到它们完成。具有异步行为的函数被调用后会立即把控制权交还给主机。异步函数和流是在CUDA中构建网格级并发的两个基本支柱。      
+从软件的角度看，CUDA操作在不同的流中并发运行；从硬件来看不一定如此，根据PCIe总线争用或每个SM资源的可用性，完成不同的CUDA流可能仍然需要互相等待。     
+
+### 6.1.1 CUDA流     
+所有的CUDA操作（包含内核和数据传输）都在一个流中显式或者隐式的运行，流分为两种：    
+- 隐式声明的流（空流）
+- 显式声明的流（非空流）     
+如果没有显式的指定一个流，那么内核启动和数据传输将默认使用空流。本书中前面章节所使用的例子都是空流或默认流。       
+另一方面，非空流可以被显式的创建和管理，如果想要重叠不同的CUDA操作，必须使用非空流。基于流的异步的内核启动和数据传输支持以下类型的粗粒度并发：     
+- 重叠主机计算和设备计算    
+- 重叠主机计算和主机与设备间的数据传输     
+- 重叠主机与设备间的数据传输和设备计算     
+- 并发设备计算     
+下面考虑以下代码：    
+```cpp
+cudaMemcpy(..., cudaMemcpyHostToDevice);
+kernel<<<grid, block>>>(...);
+cudaMemcpy(..., cudaMemcpyDeviceToHost);
+```      
+要想理解一个CUDA程序，应该从设备和主机两个角度去考虑。从设备的角度看，上述代码中所有3个被发布到默认的流中，并且按照发布顺序执行。设备并不知道其他被执行的主机操作。从主机的角度看，每个数据传输都是同步的，等它们完成后，将强制空闲主机时间。     
+内核启动是异步的，所以无论内核是否完成，主机的应用内存几乎立即恢复执行，这种内核启动的默认异步行为使它可以直接重叠设备和主机计算。     
+数据传输可以被异步发布，但是必须显式地设置一个CUDA流来装载它们，CUDA运行时缇欧杠了以下cudaMemcpy函数的异步版本：     
+```cpp
+cudaError_t cudaMemcpyAsync(void *dst, const void *src, size_t count,cudaMemcpyKind kind, cudaStream_t stream = 0);      
+```     
+请注意附加的流标识符作为第五个参数，默认情况下，流标识符被设置为默认流。这个函数与主机是异步的，所以调用发布后，控制权将会立即返回到主机。将复制操作和非空流进行关联是很容易的，但是首选需要使用如下代码创建一个非空流：     
+``cudaError_t cudaStreamCreate(cudaStream_t *pStream);``     
+cudaStreamCuda创建了一个可以显式管理的非空流。之后返回到pStream中的流就可以被当做流参数供cudaMemcpyAsync和其他异步CUDA的API来使用，在使用异步CUDA函数时，常见的疑惑在于，它们可能会从先前的异步操作中返回错误代码。**因此返回错误的API调用并不一定是产生错误的那个调用。**     
+当执行异步数据传输时，必须使用固定（或非分页）的主机内存。可以使用cudaMallocHost函数或cudaHostAlloc函数分配固定内存：     
+```cpp
+cudaError_t cudaMallocHost(void **ptr, size_t size);
+cudaError_t cudaHostAlloc(void **pHost, size_t size, unsigned int flags);
+```    
+在主机虚拟内存中分配固定内存，可以确保其在CPU内存中物理位置在应用程序的整个生存周期中保持不变。否则，操作系统可以随时自由改变主机虚拟内存的物理位置。如果在没有固定主机内存的情况下执行一个异步CUDA转移操作，操作系统可能会在物理层面上移动数组，而CUDA操作运行时将该数组移动到设备中，这样会导致未定义的行为。
+在非默认流中启动内核，必须在内核执行配置中提供一个流标识符来作为第4个参数：    
+```cpp
+kernel_name<<<grid, block, sharedMemSize, stream>>>(argument list);
+```     
+一个非默认流声明如下：    
+``cudaStream_t stream;``     
+非默认流可以使用如下方式创建：     
+``cudaStreamCreate(&stream);``    
+使用以下代码释放流中的资源：    
+``cudaError_t cudaStreamDestroy(cudaStream_t stream);``     
+在一个流当中，当cudaStreamDestroy函数被调用时，如果该流有未完成的工作，cudaStreamDestroy函数将立即返回，当流中所有工作都已经完成时，与流相关的资源将自动被释放。     
+因为所有CUDA操作流都是异步的，所以CUDA的API提供了两个函数来检查流中所有的操作是否都已经完成：     
+```cpp
+cudaError_t cudaStreamSynchronize(cudaStream_t stream);
+cudaError_t cudaStreamQuery(cudaStream_t stream);
+```     
+cudaStreamSynchronize强制阻塞主机，直到在给定流中所有的操作都完成了。cudaStreamQuery会检查流中所有操作是否都已经完成，但是在它们完成前不会阻塞主机。当所有操作都完成时cudaStreamQuery函数会返回cudaSuccess，当一个或者多个操作仍在执行或者等待执行时返回cudaErrorNotReady。     
+以下是一个在多个流中调度CUDA操作的常见模式：     
+```cpp
+for (int i = 0; i < nStream; i++)
+{
+    int offset = i * bytesPerStream;
+    cudaMemcpyAsync(&d_a[offset], &a[offset], bytePerStream, streams[i]);
+    kernel<<<grid, block, 0, streams[i]>>>(&d_a[offset]);
+    cudaMemcpyAsync(&a[offset], &d_a[offset], bytesPerStream, streams[i]);
+}
+for (int i = 0; i < nStream; i++) 
+{
+    cudaStreamSynchronize(stream[i]);
+}
+```        
+下图用一个简单的时间轴，展示了使用3个流的CUDA操作。数据传输和内核计算均是分布在3个并发流中的。     
+![](https://files.catbox.moe/a5hfp5.png)      
+上图揭示了一个问题：数据传输操作虽然分布在不同的流中，但是并未并发执行，这是由一个共享资源导致的：PCIe总线。虽然从编程角度来看这些操作是独立地，但是因为它们共享一个相同的硬件资源，所以它们的执行必须是串行的。具有双工PCIe总线的设备可以重叠的两个数据传输，但它们必须在不同的流中一级不同的方向上。图上就可以看到，在一个流找那个从主机到设备的数据传输与另一个流中从设备到主机的数据传输是重叠的。     
+并发内核的最大数量是依赖设备而确定的。Fermi支持16路并发，Kepler支持32路并发。设备上可用的计算资源进一步限制了并发内核的数量，例如共享内存和寄存器。      
+
+### 6.1.2 流调度     
+从概念上说，所有流可以同时运行，但是当前流映射到物理硬件时并不总是这样。本节将说明如何通过硬件调度多个CUDA流内的并发内核操作。      
+#### 6.1.2.1 虚假的依赖关系    
+虽然Fermi GPU支持16路并发，即多达15个网格同时执行，但是所有的流最终是被多路复用到单一的硬件工作队列中。当选择一个网格执行，在队列前面的任务由CUDA运行时调度。运行时检查任务的依赖关系，如果仍有任务在执行，那么将等待该任务依赖的任务执行完。最后，当所有依赖关系都执行结束时，新任务被调度到可用的SM中。这种单一的流水线可能会导致虚假的依赖关系。如图所示，最终只有带圆圈的任务被并行执行，因为在启动其他网格前，运行时将会被阻塞。在工作队列中，一个阻塞的操作将会将该操作后面所有操作都阻塞，即使它们属于不同的流。      
+![20210902111606](https://i.loli.net/2021/09/02/NSj35s9dmzi6e8b.png)
+
+#### 6.1.2.2 Hyper-Q技术
+![20210902111659](https://i.loli.net/2021/09/02/ajOR2qohGCiFJlk.png)    
+Kepler架构中的Hyper-Q技术用于提升性能，实现全流级并发。     
+
+### 6.1.3 流的优先级    
+对于计算能力超过3.5甚至更高的设备，可以给流先分配优先级，使用下面的函数可以创建一个具有特定优先级的流：    
+``cudaError_t cudaStreamCreateWithPriority(cudaStream_t *pStream, unsigned int flags, int priority);``       
+使用以下函数查询优先级的允许范围：    
+``cudaError_t cudaDeviceGetStreamPriorityRange(int *leastPriority, int *greatestPriority);``
+这个函数返回最低和最高的优先级，一般来说一个低整数表示一个更高的优先级，如果当前的设备不支持流优先级，cudaDeviceGetStreamPriorityRange将0返回给这两个参数。    
+
+### 6.1.4 CUDA事件     
+CUDA事件本质上是CUDA流中的标记，它与该流内操作中特定点相关联。可以使用事件来执行以下两个基本任务：     
+- 同步流的执行    
+- 监控设备的进展     
+CUDA的API提供了在流中任意点插入事件以及查询事件完成的函数。只有当一个给定CUDA流中先前的所有操作都执行结束后，记录在该流内事件才会起作用。在默认流中指定的事件，适用于CUDA中先前所有的操作。      
+
+#### 6.1.4.1 创建和销毁
+一个事件的声明如下：     
+```
+cudaEvent_t event;   
+```     
+一旦被声明，事件可以用以下代码进行创建：    
+```
+cudaError_t cudaEventCreate(cudaEvent_t *event);
+```    
+使用如下代码销毁一个事件：      
+```
+cudaError_t cudaEventDestroy(cudaEvent_t event);
+```     
+     
+#### 6.1.4.2 记录事件和计算运行时间     
+事件在流执行中标记了一个点。它们可以检查正在执行的流操作是否已经到达了给定点。它们可以被看做是添加到CUDA流中的操作。当从工作队列中取出时，这个操作的唯一作用就是通过主机端标志来指示完成的状态。一个事件使用如下函数排队进入CUDA流：     
+```
+cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0);   
+```     
+已经排队进入CUDA流中的的事件可用于等待或者测试在指定流中先前操作的完成情况。等待一个事件会阻塞主机线程的调用，它可用下面的函数来执行：    
+```
+cudaError_t cudaEventSynchronize(cudaEvent_t event);
+```    
+对于流来说，cudaEventSynchronize函数释放类似于cudaStreamSynchronize函数，但是前者允许主机等待流执行中的中间点。     
+可以使用如下代码测试一个事件是否可以不用阻塞主机应用程序来完成：     
+```
+cudaError_t cudaEventQuery(cudaEvent_t event);
+```
+下面的函数用来计算两个事件标记的CUDA操作的运行时间：    
+```
+cudaError_t cudaEventElapsedTime(float* ms, cudaEvent_t start,cudaEvent_t stop);
+```
+下面的示例代码演示了如何将事件用于事件设备操作：    
+```cpp
+cudaEvent_t start, stop;
+cudaEventCreate(&start);
+cudaEventCreate(&stop);
+
+//record start event on the default stream
+cudaEventRecord(start);    
+
+//execute kernel     
+kernel<<<grid, block>>>(arguements);
+
+//record stop event on the default stream   
+cudaEventRecord(stop); 
+
+//calculate the elapsed time between two events
+float time;
+cudaEventElapsedTime(&time, start, stop);
+
+//clean up the two events
+cudaEventDestroy(start);
+cudaEventDestroy(stop);
+```
+
+### 6.1.5 流同步      
+在非默认流中，所有操作杜宇主机线程都是非阻塞的，因此会需要在同一流中运行主机和运算操作同步的情况。     
+CUDA操作分为两类：     
+- 内存相关操作
+- 内核启动     
+非空流可以进一步分为：    
+- 阻塞流；
+- 非阻塞流；
+
+#### 6.1.5.1 阻塞流和非阻塞流     
+使用cudaStreamCreate函数创建的流是阻塞流，这意味着这些流中执行操作可以被阻塞，一直等到空流中先前的操作执行结束。空流是隐式流，在相同的CUDA上下文中它和其他所有的阻塞流同步。一般情况下，当操作被发布到空流中，在该操作被执行之前，CUDA上下文会等待所有的先前的操作发布到所有的阻塞流中。此外，任何发布到阻塞流中的操作，会被挂起等待，直到空流中先前的操作执行结束才开始执行。     
+例如：     
+```
+kernel_1<<<1, 1, 0, stream_1>>>();
+kernel_2<<<1, 1>>>();
+kernel_3<<<1, 1, 0, stream_2>>>();
+```        
+这段代码结果是直到核函数kernel_1执行结束，kernel_2才会在GPU上执行，kernel_2执行结束后，kernel_3才开始执行。注意，**从主机角度看，每一个内核仍然是异步或者非阻塞的**。      
+CUDA运行时提供了一个定值函数，它是关于空流的非空流行为：     
+```
+cudaError_t cudaStreamCreateWithFlags(cudaStream_t *pStream, unsigned int flags);
+```      
+flags参数决定了所创建流的行为，有效值如下：    
+> cudaStreamDefault:默认流（阻塞）
+> cudaStreamNonBlocking：非阻塞流创建     
 
 
+#### 6.1.5.2 隐式同步     
+隐式同步在CUDA中可能会导致不必要的阻塞，这种阻塞经常发生在设备层面。许多和内存相关的操作意味着在当前设备上所有先前的操作上都由阻塞：    
+- 锁页主机内存分配
+- 设备内存分配
+- 设备内存初始化
+- 同一设备上两个地址之间的内存复制
+- 一级缓存/共享内存配置的修改    
 
+#### 6.1.5.3 显式同步         
+CUDA运行时在网格级支持显式同步CUDA程序的集中方法：    
+- 同步设备
+- 同步流
+- 同步流中的事件    
+- 使用事件跨流同步      
+使用下述函数可以阻塞一个主机线程直到设备完成所有先前的任务：    
+``cudaError_t cudaDeviceSynchronize(void);``     
+这个函数使主机线程等待直到所有和当前设备相关的计算和通信完成，因为这是一个比较重要的同步函数，所以应该尽量减少使用该函数，以免拖延主机运行。    
+使用``cudaStreamSynchronize``函数可以阻塞主机线程直到流中所有操作完成为止，使用cudaStreamQuery函数可以完成非阻塞测试，使用``cudaEventSynchronize``函数和``cudaEventQuery``，可以实现细粒度的阻塞和同步。此外cudaStreamWaitEvent函数提供了一个使用CUDA事件引入流间依赖关系比较灵活的方法：    
+```
+cudaError_t cudaStreamWaitEvent(cudaStream_t stream, cudaEvent_t event);
+```     
+在流中执行任何队列的操作之前，并且在cudaStreamWaitEvent,cudaStreamWaitEvent函数能够使任何指定流等待指定事件。该事件可能与同一个流有关，也可能与不同流有关。在后者的情况下，这个函数执行跨流同步。如下图所示，流2的发布可以确保在流1创建的事件是满足依赖关系，然后继续。     
+![20210903103225](https://i.loli.net/2021/09/03/va5LCdJfk4r2jle.png)     
 
+#### 6.1.5.4 可配置事件      
+CUDA运行时提供了一种方式来定制事件的行为和性能：    
+```
+cudaError_t cudaEventCreateWithFlags(cudaEvent_t *event, unsigned int flags); 
+```    
+有效的标志包含以下四个：    
+```
+cudaEventDefault
+cudaEventBlockingSync
+cudaEventDisableTiming
+cudaEventInterprocess
+```    
+其中cudaEventBlockingSync指定使用cudaEventSynchronize函数同步事件会阻塞调用的状态。cudaEventSynchronize函数的默认操作都是围绕事件进行的，使用CPU周期不断检查事件的状态。将标志设成cudaEventBlockingSync，调用的线程在另一个将要休眠的线程或进程上运行，而不是放弃核心，直到事件满足依赖关系。如果有其他可用的工作可以被执行，那么这样会减少CPU周期的浪费，但是这也会使事件满足依赖关系以及激活调用线程之间的延迟被加长。      
+设置cudaEventDisableTiming表明创建的事件只能用来同步，而不需要记录时序数据，出去时间戳花费的总开销提高了调用cudaStreamWaitEvent和cudaEventQuery函数调用的性能。    
+标志设置为cudaEventInputpreocess表明创建的事件可能被用作进程间的事件。    
 
+## 6.2 并发内核执行       
+### 6.2.1 非空流中的并发内核      
+本节中使用多个相同内容的核函数：    
+```cpp
+__global__ void kernel_1()
+{
+    double sum = 0.0;
+    for (int i = 0; i < N; i++)
+    {
+        sum += tan(0.1) * tan(0.1);
+    }
+}
+```    
+首先创建一组非空流：   
+```cpp
+cudaStream_t *streams = (cudaStream_t*)malloc(n_streams * sizeof(cudaStream_t));
+for (int i = 0; i < n_streams; i++)
+{
+    cudaStreamCreate(&streams[i]);
+}
+```     
+使用一个循环遍历所有的流，这样使得内核在每个流中都可以被调度：    
+```cpp
+dim3 block(1);
+dim3 grid(1);
+for (int i = 0; i < n_streams; i++)
+{
+    kernel_1<<<grid, block, 0, streams[i]>>>();
+    kernel_2<<<grid, block, 0, streams[i]>>>();
+    kernel_3<<<grid, block, 0, streams[i]>>>();
+    kernel_4<<<grid, block, 0, streams[i]>>>();
+}
+```    
+这些内核启动的执行配置被指定为单一线程块中的单一线程，来保证有足够GPU资源并发运行所有的内核。因为每个内核启动相对于主机来说都是异步，所以就可以使用单一主机线程同事调度多个内核到不同的流中。     
+最终nvvp中结果如下。    
+![20210903133304](https://i.loli.net/2021/09/03/d896WXb5zvQtcVf.png)
 
+### 6.2.2 虚假的依赖关系    
+Fermi因为不支持Hyper-Q，，内核会中会限制并发一起执行。（上一节同一个程序）    
+主要因为使用了深度优先的方法，在下一个流启动前，在该流中启动全系列的操作。    
+利用深度优先方法得到的工作队列中的任务顺序
+![20210903134342](https://i.loli.net/2021/09/03/SlnpeU8zOEYHmcJ.png)
+可以改写为广度优先的办法避免虚假的依赖关系：    
+```cpp
+for (int i = 0; i < n_streams; i++)
+    kernel_1<<<grid, block, 0, streams[i]>>>();
+for (int i = 0; i < n_streams; i++)
+    kernel_2<<<grid, block, 0, streams[i]>>>();
+for (int i = 0; i < n_streams; i++)
+    kernel_3<<<grid, block, 0, streams[i]>>>();
+for (int i = 0; i < n_streams; i++)
+    kernel_4<<<grid, block, 0, streams[i]>>>();    
+```
+![20210903134633](https://i.loli.net/2021/09/03/rZoAasnGdDXQL6I.png)     
 
+### 6.2.3 使用OpenMP的调度操作     
+前面的示例中，是使用单一主机线程将异步CUDA操作调度到多个流中，本节示例将使用多个主机线程将操作调度到多个流中，并使用一个线程来管理每一个流。     
+OpenMP是CPU的并行编程模型，它使用编译器指令来识别并行区域。支持OpenMP指令的编译器可以将它们用作如何并行化应用程序的提示。用很少的代码，在主机上就可以实现多核并行。     
+在使用OpenMP的同时使用CUDA，不仅可以提高便携性和生产效率，而且可以提高主机代码性能。在simpleHyperQ的例子中，我们使用了一个循环调度操作。榆次不同，我们使用了OpenMP线程调度操作到不同流中，方法如下：    
+```cpp
+omp_set_num_threads(n_streams);
+#pragma omp parallel
+{
+    int i = omp_get_thread_num();
+    kernel_1<<<grid, block, 0, streams[i]>>>();
+    kernel_2<<<grid, block, 0, streams[i]>>>();
+    kernel_3<<<grid, block, 0, streams[i]>>>();
+    kernel_4<<<grid, block, 0, streams[i]>>>();
+}
+```
 
+### 6.2.4 用环境变量调整流行为     
+支持Hyper-Q的GPU在主机和每个GPU之间维护硬件队列，消除虚假的依赖关系。Kepler设备支持的硬件工作队列的最大数量是32。然而，默认情况下并发硬件连接的数量被限制为8.由于每个连接都需要额外的内存和资源，所以设置默认的限制为8，减少了不需要全部32个工作队列的应用程序的资源消耗。可使用CUDA_DEVICE_MAX_CONNECTIONS环境变量来调整并行硬件连接的数量，对于Kepler设备而言，其上限为32。      
+有几种设置该环境变量方法，在Linux中，可根据shell版本，通过以下代码进行设置，对于Bash：    
+``export CUDA_DEVICE_MAX_CONNECTIONS = 32;``
+或者
+``export CUDA_DEVICE_MAX_CONNECTIONS 32``     
+也可以通过C主机程序中设定：     
+```
+setenv("CUDA_DEVICE_MAX_CONNECTIONS", "32", 1);
+```     
+每个CUDA流都会被映射到单一的CUDA设备连接中。如果流的数量超过了硬件连接的数量，多个流将共享一个连接。当多个流共享相同的硬件工作队列时，可能会产生虚假的依赖关系。    
+使用广度优先的方法，就可以避免虚假的依赖关系。    
+![20210903144327](https://i.loli.net/2021/09/03/ekPVT54sjqJU3Yw.png)     
+![20210903144425](https://i.loli.net/2021/09/03/zKZ2Vgsu69PMxBT.png)     
 
+### 6.2.5 GPU资源的并发限制      
+有限的内核资源可以抑制应用程序中可能出现的内核并发的数量。     
+### 6.2.6 默认流的阻塞行为    
+```cpp
+for (int i = 0; i < n_streams; i++)
+{
+    kernel_1<<<grid, block, 0, streams[i]>>>();
+    kernel_2<<<grid, block, 0, streams[i]>>>();
+    kernel_3<<<grid, block>>>();
+    kernel_4<<<grid, block, 0, streams[i]>>>();
+}
+```
+![20210903145607](https://i.loli.net/2021/09/03/VQJUNtFS31HXEyh.png)     
 
+### 6.2.7 创建流间依赖关系     
+理论上来说不应该有非计划内的依赖关系，但是可以通过事件来完成流间的依赖关系。   
+首先将标志设置为cudaEventDisableTiming，创建同步事件，代码如下：    
+```cpp
+cudaEvent_t *kernelEvent = (cudaEvent_t*)malloc(n_streams * sizeof(cudaEvent_t));
+for (int i = 0; i < n_streams; i++)
+    cudaEventCreateWithFlags(&kernelEvent[i], cudaEventDisableTiming);
+```     
 
+```cpp
+for (int i = 0; i < n_streams; i++)
+{
+    kernel_1<<<grid, block, 0, streams[i]>>>();
+    kernel_2<<<grid, block, 0, streams[i]>>>();
+    kernel_3<<<grid, block, 0, streams[i]>>>();
+    kernel_4<<<grid, block, 0, streams[i]>>>();
 
+    cudaEventRecord(kernelEvent[i], streams[i]);
+    cudaStreamWaitEvent(streams[n_streams - 1], kernelEvent[i], 0);
+}
+```
+![20210903151435](https://i.loli.net/2021/09/03/VPuLf6xjtpwKgHb.png)
 
+## 6.3 重叠内核执行和数据传输     
+本节研究如何并发执行内核和数据传输。重叠内核和数据传输表现出不同的行为，并且需要考虑一些与并发内核执行相比不同的因素。      
+Fermi和Kepler都有两个复制引擎队列：一个用于将数据传输到设备，另一个用于从设备中将数据提取出来。因此，最多可以重叠两个数据传输，并且只有当它们方向不同的并且被调度到不同流中的时候才能这样做，否则所有的数据传输都是串行的。     
+另一方面，还需要检验数据传输和内核执行之间的关系，从而可以区分以下情况：    
+- 一个内核使用数据A，那么对A传输必须安排在内核启动前，而且必须位于相同的流中；
+- 如果一个内核完全不使用数据A，那么内核执行和数据传输可以位于不同的流中；    
 
+### 6.3.1 使用深度优先调度重叠
+第2章的向量加法程序中，数据传输是通过同步复制函数实现的。要重叠数据传输和内核执行，必须使用异步复制函数。因为异步复制函数需要固定的主机内存，所以首先需要使用cudaHostAlloc函数，在固定主机内存中修改主机数组的分配：    
+```cpp
+cudaHostAlloc((void**)&gpuRef, nBytes, cudaHostAllocDefault);
+cudaHostAlloc((void**)&hostRef, nBytes, cudaHostAllocDefault);
+```    
+接下来，需要在NSTREAM流中平均分配该问题的任务，每一个流要处理的元素数使用以下代码定义：    
+```cpp
+int iElem = nElem / NSTREAM;
+```      
+现在，使用一个循环来为几个流同时调度iElem个元素的通信和计算，代码如下：    
+```cpp
+for (int i = 0; i < NSTREAM; ++i)
+{
+    cudaMemcpyAsync(&d_A[ioffset], &h_A[ioffset], iBytes, cudaMemcpyHostToDevice, stream[i]);
+    cudaMemcpyAsync(&d_B[ioffset], &h_B[ioffset], iBytes, cudaMemcpyHostToDevice, stream[i]);
+    sumArrays<<<grid, block, 0, stream[i]>>>(&d_A[ioffset], &d_B[ioffset], &d_C[ioffset], iElem);
+}
+```     
+由于这些内存复制和内核启动相对于主机而言是异步的，因此全部的工作负载都可以毫无阻塞的在流之间进行分配。通过将数据传输和该数据上的计算放置在同一个流中，输入向量、内核计算以及向量之间的依赖关系可以被保持。     
+为了对比，这里还使用了一个阻塞实现来计算基准性能。     
+```cpp
+sumArrays<<<grid, block>>>(d_A, d_B, d_C, nElem);
+```
+nvvp结果显示了多种重叠，还呈现了两种阻塞。
+![20210903162511](https://i.loli.net/2021/09/03/TbJMCEW8D6zfmiy.png)    
+虽然主机到设备的数据传输是在4个不同的流中完成的，但时间轴显示它们是按顺序执行的，因为实际上它们是通过相同的复制引擎队列来执行的。     
+
+###### 网格管理单元    
+Kepler引入了一个新的网格管理和调度控制系统，即网格管理单元（GMU）；它主要是用于暂停新网格的调度，使得网格排队等待且暂停网格直到它们准备好执行，动态并行就是它在起作用。Fermi架构上网格直接被发到CUDA工作分配器上，而Kepler以后的架构都是先被发送到GMU上。     
+
+### 6.3.2 使用广度优先调度重叠     
+先前的例子表明，当采用广度优先的方式调度内核时，Fermi GPU可以实现最好的调度效果。总而言之Kepler向后的架构是无需考虑相关问题的。     
+
+## 6.4 重叠GPU和CPU执行     
+给出例子反映内核被调度到默认流中，并且等待GPU内核时执行主机计算。使用3个CUDA计算：    
+```cpp
+cudaMemcpyAsync(d_a, h_a, nbytes, cudaMemcpyHostToDevice);
+kernel<<<grid, block>>>(d_a, value);
+cudaMemcpyAsync(h_a, d_a, nbytes, cudaMemcpyDeviceToHost);
+cudaEventRecord(stop);
+```
+上面所有操作都是与主机异步的，被绑定到默认流中，最后cudaMemcpyAsync函数一旦发布，控制权将立刻返回到主机。一旦控制权返回主机，主机就可以做任何有用的计算，而不必依赖内核输出。下面是个主机通过计数器来对内容进行查询：    
+```cpp
+unsigned long int counter = 0;
+while (cudaEventQuery(stop) == cudaErrorNotReady)
+{
+    counter++;
+}
+```    
+
+## 6.5 流回调    
+流回调是另一种可以到CUDA流中排列等待的操作。一旦流回调之前所有的流操作全部完成，被流回调指定的主机端函数就会被CUDA运行时所调用。此函数由应用程序提供，并且允许任意主机逻辑插入到CUDA流中。流回调是另一种CPU和GPU的同步机制，十分强大。它一定程度的实现了GPU在主机上创建工作，这与CUDA概念完全相反。     
+流回调是由应用程序提供的一个主机函数，使用以下API注册：    
+``cudaError_t cudaStreamAddCallback(cudaStream_t stream, cudaStreamCallback_t callback, void *userData, unsigned int flags);``    
+此函数为提供的流添加了一个回调函数，在流中所有先排队的操作后，回调函数才能在主机上执行，每使用cudaStreamAllCallback，只执行一次回调，并阻塞队列中排在其后面的工作，直到回调函数完成。当它被CUDA运行时调用，回调函数会通过调用它的流，并且会有错误代码来表明是否有CUDA错误的发生。还可以使用cudaStreamAddCallback的userData参数，指定传递给回调函数的应用程序数据。    
+**在所有流中先前的全部工作都完成后，排在空流中的回调队列才被执行。**     
+对于回调函数有两个限制：    
+- 从回调函数中不可调用CUDA的API函数；
+- 在回调函数中不可以执行同步；    
+下面的代码示例在4个流都执行4个内核后，为每个流的末尾添加回调函数my_callback。只有每个流中所有工作都完成后，回调函数才在开始在主机运行。     
+```cpp
+void CUDART_CB my_callback(cudaStream_t stream, cudaError_t status, void *data)
+{
+    printf("callback from stream %d\n", *((int*)data));
+}
+```      
+
+为每个流加流回调的代码如下：    
+```cpp
+for (int i = 0; i < n_streams; i++)
+{
+    stream_ids[i] = i;
+    kernel_1<<<grid, block, 0, streams[i]>>>();
+    kernel_2<<<grid, block, 0, streams[i]>>>();
+    kernel_3<<<grid, block, 0, streams[i]>>>();
+    kernel_4<<<grid, block, 0, streams[i]>>>();
+
+    cudaStreamAddCallback(streams[i], my_callback, (void*)(stream_ids + i), 0);
+}
+```    
+    
+      
+# 7 调整指令级原语     
+当决定CUDA处理一个特殊的应用程序时，通常应该考虑GPU的计算吞吐量。从这一点把应用程序分为两类：    
+- I/O密集型
+- 计算密集型     
+这里举的例子为乘法加，或者称为MAD，现在GPU都支持MAD指令，这样会把循环次数减少一半。但是MAD的缺点在于精度无法保证。    
+
+## 7.1 CUDA指令概述   
+显著影响CUDA内核生成指令的3大因素：    
+> 浮点运算
+> 内置函数和标准函数
+> 原子操作   
+### 7.1.1 浮点指令    
+都使用IEEE754标准，分别有32位（单精度）或64位（双精度）定义：    
+![20210903173153](https://i.loli.net/2021/09/03/WTAH6kxGRt3lU9C.png) 
+浮点粒度和整形粒度有着巨大的不同：     
+![20210903173717](https://i.loli.net/2021/09/03/4HO1Ttdeyq39FQ7.png)     
+尽管CUDA都支持单精度浮点数运算，但是还是需要在计算能力大于1.3的版本上使用双精度。     
+
+### 7.1.2 内部函数和标准函数     
+CUDA内置函数只能对设备代码进行访问，事实上很多内部函数都是在GPU上硬件实现的，因为它们中大部分是用图形应用计算的。     
+此外还有许多内部函数与标准函数是有关联的。举个例子，标准函数中的双精度浮点平方根函数是sqrt，有相同功能的内部函数是__dsqrt_rn，还有执行单精度浮点出发运算的内部函数：__fdividef。     
+内部函数分解成了与它们等价的标准函数更少的指令，这会导致内部函数比等价的标准函数更快，但是数值精确度却更低。     
+
+### 7.1.3 原子操作指令     
+原子操作是指一个独立不间断的操作，并且没有其他线程的干扰。它们可以实现对跨线程数据进行“读-改-写”。CUDA提供了全局32位或64位全局内存或共享内存上执行“读-改-写”操作的原子函数。从1.1计算能力以上的都支持。     
+借助下面的核函数来理解概念：    
+```cpp
+__global__ void incr(int *ptr) {
+    int temp = *ptr;
+    temp = temp + 1;
+    *ptr = temp;
+}
+```     
+事实上，如果将上面这个核函数在一个32线程的线程块上启动，它的结果是未知的，因为每个顺序都是对内容不确定的访问。     
+幸好可以使用原子核函数避免这种事：     
+```cpp
+int atomicAdd(int *M, int V);
+```      
+原子运算函数分为3种：算术运算函数、按位运算函数和替换函数。原子算术函数在目标内存位置上执行简单的算术运算，包括加、减、最大、最小、自增和自减等操作。原子位运算符在目标内存位置上执行按位操作，包括按位与、按位或、按位异或。原子替换函数可以用一个新值来替换内存位置上原有的值，它可以是有条件的也可以是无条件的。不管替换是否成功，原子替换函数总是会返回最初存储在目标位置上的值。atomicExch可以无条件的替换已有的值，如果当前存储的值与由GPU线程调用指定的值相同。那么atomicCAS可以有条件的替换已有的值。       
+使用原子函数改写以上内核：    
+```cpp
+__global__ void incr(__global__ int *ptr)
+{
+    int temp = atomicAdd(ptr, 1);
+}
+```     
+这次答案就会是正确的，对应32。      
+另一个案例，如果我们只关心位于同一线程束中的一个或者几个线程是否运行成功？   
+```cpp
+__global__ void check_threshold(int *arr, int threshold, int *flag)
+{
+    if (arr[blockIdx.x * blockDim.x + threadIdx.x] > threshold)
+    {
+        *flag = 1;
+    }
+}
+```    
+和上文一样，这种访问会可能同一时间对同一变量进行写操作，这里用atomicExch来消除这种不安全访问：    
+```cpp
+__global__ void check_threshold(int *arr, int threshold, int *flag)
+{
+    if (arr[blockIdx.x * blockDim.x + threadIdx.x] > threshold)
+    {
+        atomicExch(flag, 1);
+    }
+}
+```    
+但事实上，这样的操作可能会显著的降低其性能。     
+
+## 7.2 程序优化指令     
+### 7.2.1 单精度与双精度的比较     
+首先，单精度和双精度在通信和计算上的性能差异是不可忽略的，双精度耗时增加了整整一倍。    
+尤其要注意单精度数定义的时候不可以随意的省略末尾的f。
+      
+### 7.2.2 标准函数与内部函数的比较    
+#### 7.2.2.1 标准函数和内部函数可视化     
+例如生成一个以下核的程序：     
+![20210907101719](https://i.loli.net/2021/09/07/lGijSWgmhPYra3p.png)    
+使用内部函数相较于标准函数而言，速度提升24倍，但是内在结果比主机结果相差一个数量级。     
+当CUDA用于进行科学仿真、金融算法等高精度应用程序通常需要两个步骤：将传统只有CPU的系统移植到CUDA系统中，然后通过比较传统应用结果与使用CUDA的执行结果，来验证程序移植的数值精确性。    
+
+#### 7.2.2.2 操纵指令生成     
+即时绝大部分情况下，程序员无需要干扰CUDA编译，但是CUDA还是提供了办法来快速进行替换。例如通过CUDA编译器控制浮点数MAD（FMAD）指令生成。MAD是一个简单的编译器优化指令，它能将乘法和加法融合到一个指令中，从而使运算时间使用两个指令缩短一半。但是，这个优化需要以数值精度为代价。所以，一些应用程序会明确限制FMAD的使用。    
+nvcc可以使用``--fmad=false``选项来阻止编译器缓和任何乘法和加法。     
+除了fmad，还有一些其他指令可以用于引导指令生成：     
+![20210907103814](https://i.loli.net/2021/09/07/cA9BDRa1sUTKS4J.png)     
+可通过``__fmul``和``__dmul``都阻止MAD指令生成。      
+事实上，函数调用的__fmul_rn，很多浮点数都在最后使用两个后缀字符，指出了四舍五入的模式。     
+![20210907104754](https://i.loli.net/2021/09/07/cFkzVE6YUMJOL8j.png)
+试验在FMAD之后就已经主机和设备上产生的值是相同的。      
+
+### 7.2.3 了解原子指令    
+原子级比较交换（CAS）运算符，不仅可以在CUDA中定义自己的原子函数。     
+CAS将3个内容作为输入：内存输入、存储在此地址中的期望值，然后执行以下几步：    
+1. 读取目标地址并将该处地址的存储值与预期值进行比较；    
+a. 如果存储值与预期值相等，那么新值将存入目标位置；    
+b. 如果存储值与预期值不等，那么目标位置不会发生变化；    
+2.  不论发生什么情况，一个CAS操作总是返回目标地址中的值。注意使用返回值可以用来查看一个数值是否被替换成功，如果返回值等于传入的预期值，那么CAS操作一定成功了。    
+这只是CAS操作，一个原子CAS意味着CAS金成是没有任何其他线程的干扰下完成的，因为这是一个原子运算符。如果CAS操作返回值表示写操作成功，那么所执行的数值交换必须对其他线程也可见。     
+可使用CUDA的atomicCAS设备函数从头开始去实现一个原子函数，在这个例子中，可以进行原子级32整形加法运算。atomicCAS相关变体的函数签名为：     
+```cpp
+int atomicCAS(int *address, int compare, int val);
+```    
+其中用address是目标内存地址，compare是预期值，val是实际想写入的新值。     
+所以如何用atomicCAS执行一个原子加法呢？首先分解加法运算并且把它定义为CAS操作，当执行自定义的原子操作时，定义目标的起始和结束状态是很有帮助的。在原子加法中，起始状态是递增运算的基值。结束状态是起始状态和增量的综合，这个定义直接转换为atomicCAS：预期值是起始状态，实际写入的新值是完整状态；
+```cpp
+__device__ int myatomicAdd(int* address, int incr) {
+    int expected = *address;
+    int oldValue = atomicCAS(address, expected, expected + incr);
+
+    while (oldValue != expected)
+    {
+        expected = oldValue;
+        oldValue = atomicCAS(address, expected, expected + incr);
+    }
+    return oldValue;
+}
+```     
+这个myAtomicAdd函数可以实现原子加法，但是只有执行atomicCAS后，读入excepted的值与存入address的值相同时才会操作成功。因为目标位置是多线程共享的（否则不需要原子操作），所以另一个线程修改address的值是有可能的，这个值处于被excpeted读入和atomicCAS修改之间。如果发生这种情况，atomicCAS的执行会因为在“address”的值和“”excepted中的值不同而失败。      
+回忆一下可知，如果automicCAS返回值与预估值不同，则会返回失败。因此myAtomicAdd可以用来检查失败，并且在一个循环中重试CAS直到atomicCAS成功。
+
+#### 7.2.3.2 内置的CUDA原子函数      
+![20210907113534](https://i.loli.net/2021/09/07/CQimAWZ4LdzwhKo.png)     
+
+#### 7.2.3.3 原子的操作成本      
+原子操作虽然好，但是可能需要付出比较高的性能代价，有好几个原因：    
+1. 在全局或共享内存中执行原子操作时，能保证所有数值变化对所有线程都是立即可见的。    
+2. 共享地址冲突的原子访问可能要求发生冲突的线程不断地进行重试。    
+3. 当线程在同一个线程束中时必须执行的不同指令，线程束是序列化。     
 
