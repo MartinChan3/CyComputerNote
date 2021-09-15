@@ -1397,5 +1397,15 @@ enum InitOptions {ioReverseSolution = 1, ioStrictlySimple = 2, ioPreserveColline
 (initOptions & ioStrictlySimple) != 0 //用于看某个选项是否有启用
 ```   
 
-183. 取整：static_cast<int>(val + 0.5);(负数的话就是static_cast<int>(val - 0.5))
+183. 取整：static_cast<int>(val + 0.5);(负数的话就是static_cast<int>(val - 0.5))      
+
+184. C++中int类型表示无穷大的法则，一般有三个无穷大(三个原则：小于10^9、无限大加有理数等于无限大、方便使用memset进行清零操作)：     
+0x7fffffff:int类型上界
+0x3fffffff:一个无穷大加上一个有理数仍是无穷大
+0x3f3f3f3f:方便清零     
+此外long long类型如果数字大于2^31 - 1，该数字后面必须增加LL。例如``static cInt const hiRange = 0x3FFFFFFFFFFFFFFFLL;``。（单个L就是针对LONG的）      
+
+
+
+
 
