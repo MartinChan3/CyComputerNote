@@ -1411,7 +1411,7 @@ enum InitOptions {ioReverseSolution = 1, ioStrictlySimple = 2, ioPreserveColline
 
 187. kernel函数只能写在cu文件中（因为nvcc编译器只针对cu文件进行编译）
 
-
+188.
 
 
 
