@@ -1405,6 +1405,12 @@ enum InitOptions {ioReverseSolution = 1, ioStrictlySimple = 2, ioPreserveColline
 0x3f3f3f3f:方便清零     
 此外long long类型如果数字大于2^31 - 1，该数字后面必须增加LL。例如``static cInt const hiRange = 0x3FFFFFFFFFFFFFFFLL;``。（单个L就是针对LONG的）      
 
+185. 有时候在qmake中添加VERSION版本号编译出来有问题，是因为添加了RC_FILE字段，然后后面考虑使用RC_ICON替代掉图标设置功能即可。     
+
+186. C++中类成员只有非静态变量占用对应的空间(静态成员归属于全局)，而成员函数（无论静态与否）都不占用空间。[Baidu Zhidao](https://zhidao.baidu.com/question/240004966098028404.html )     
+
+187. kernel函数只能写在cu文件中（因为nvcc编译器只针对cu文件进行编译）
+
 
 
 
