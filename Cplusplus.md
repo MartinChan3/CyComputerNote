@@ -1409,9 +1409,11 @@ enum InitOptions {ioReverseSolution = 1, ioStrictlySimple = 2, ioPreserveColline
 
 186. C++中类成员只有非静态变量占用对应的空间(静态成员归属于全局)，而成员函数（无论静态与否）都不占用空间。[Baidu Zhidao](https://zhidao.baidu.com/question/240004966098028404.html )     
 
-187. kernel函数只能写在cu文件中（因为nvcc编译器只针对cu文件进行编译）
+187. kernel函数只能写在cu文件中（因为nvcc编译器只针对cu文件进行编译）    
 
-188.
+188. C++中~表示取反运算符，C中<<=、>>=、~=是指向右移位赋值、向左移位赋值以及按位取反。     
+
+189. 
 
 
 
