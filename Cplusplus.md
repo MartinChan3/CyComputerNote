@@ -1413,7 +1413,7 @@ enum InitOptions {ioReverseSolution = 1, ioStrictlySimple = 2, ioPreserveColline
 
 188. C++中~表示取反运算符，C中<<=、>>=、~=是指向右移位赋值、向左移位赋值以及按位取反。     
 
-189. 
+189. C/C++当中volatile关键字指的是强制某个变量将会立即强制修改，而非放到寄存器中等待操作（并行框架中必须在某些判断变量或赋值变量加上此定义，指定该变量的变化是立即发生的，例如CUDA）
 
 
 
