@@ -1415,5 +1415,7 @@ enum InitOptions {ioReverseSolution = 1, ioStrictlySimple = 2, ioPreserveColline
 
 189. C/C++当中volatile关键字指的是强制某个变量将会立即强制修改，而非放到寄存器中等待操作（并行框架中必须在某些判断变量或赋值变量加上此定义，指定该变量的变化是立即发生的，例如CUDA）
 
+190. MQTT中的通配符原则[CSDN](https://blog.csdn.net/mrhs_dhls/article/details/112644964 )    
 
+191. 命令行默认不能使用空格，需要使用双引号括起来即可；
 
